@@ -1,0 +1,53 @@
+body {
+  margin: 0;
+  color: white;
+  background: #263344;
+  line-height: 1.25;
+  font-family: arial;
+}
+
+p {
+  color: #bbc;
+}
+
+header {
+  background: #2f3f54;
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+header .logo {
+  display: flex;
+}
+
+header .logo h1 {
+  margin: 0.5em 1em;
+}
+
+header nav ul {
+  list-style-type: none;
+  display: flex;
+}
+
+.splash {
+  height: 50vh;
+  display: flex;
+}
+
+.splash .title {
+  font-size: 1.5em;
+  padding: 4em 1em 1em 2em;
+}
+
+.splash .face {
+  transform: scaleX(-1) rotateZ(30deg);-
+}
+
+.benefits {
+  display: flex;
+}
+
+.benefits article {
+  margin: 2.5em;
+}
