@@ -8,7 +8,7 @@
 <body>
   <header>
     <div class="logo">
-      <img src="" alt="">
+      <img src="images/logo.svg" width="65" height="65" alt="">
       <h1>
         Monereum
       </h1>
@@ -16,78 +16,94 @@
     <nav>
       <ul>
         <li>Market</li>
-        <li>Send MNR</li>
-        <li>Account</li>
+        <li>Transactions</li>
+        <li>Wallet</li>
       </ul>
     </nav>
   </header>
   <main>
     <section class="splash">
-      <div class="title">
-        <h1>Send ETH coins anonymously</h1>
-      </div>
+      <img class="splash__img" src="images/nodes.png" alt="">
+      <h1>
+        Trustlessly exchange Ethereum<br/>
+        Do it anonymously
+      </h1>
       <div class="face">
-        <img src="images/anonymous.png" width=250 height=250 alt="">
       </div>
     </section>
     <section class="benefits">
-      <article class="">
+      <article class="untraceable">
         <div class="title">
-          <img src="" alt="">
           <h1>Untraceable</h1>
         </div>
         <p>
-          Everytime you spend MNR, the source is obscured amongst dozens of other transactions,
-          so that the receiver will never be able to discover who you are. Signatures will allow you
+          Everytime you spend MNR, the source is obscured amongst dozens of other transactions
+          within an impossible to trace web of anonymous transactions.
+          The receiver will never be able to discover who you are. Signatures will allow you
           to prove you're the one who sent the funds, without giving up your public address.
         </p>
-        <hr/>
         <p>
-          Everytime you receive MNR, you can generate a new receiving address and get paid
-          without ever disclosing your identity. All of your receiving funds will seamlessly
-          combine into the same wallet.
-        </p>
-        <hr/>
-        <p>
-          Each transaction you make from your wallet will only cause your funds to mix and churn even more. You can even
-          continuously exchange money with yourself to create an impossibly complex web of transactions that,
-          from the outside, will look like there were thousands of different people exchanging MNR between each other.
+          Everytime you want to receive MNR, you can give them a new public address - and your identity never gets disclosed.
+          All of your receiving funds will seamlessly combine into the same wallet. Even if you choose to broadcast
+          a public address for anyone to send MNR to, each transfer to your public address will be encrypted on the blockchain
+          such that only you can decrypt it.
         </p>
       </article>
-      <article class="">
+      <article class="exchange">
         <div class="title">
-          <img src="" alt="">
-          <h1>Convert to Ethereum Instantly</h1>
+          <h1>Exchange with Ethereum Instantly</h1>
+          <img id="exchange_img" src="images/ethExchange.svg" width=350 alt="">
         </div>
         <p>
-          Use the market to generate an new anonymous Ethereum wallet from your MNR, and
-          spend it on other Ethereum-based platforms using ETH coins that came from thin
-          air.<br/><br/>
-
-          This provides a service that is much easier to use than mixers or inter-coin transfers
-          between ETH and XMR. No more trusting centralized exchanges to mix your ETH with others,
-          or trusting them to give you XMR after you give them your ETH. Playing mixers with BTC can even
-          be illegal if you receive a tainted coin. A MNR coin will never be tainted, as both parties
-          will always be obscured, and you can always self-churn to disconnect yourself from the original coin.
+          If all of the above already exists using XMR, what's so special about MNR?
+        </p>
+        <p>
+          Simple: It's a Smart Contract, on Ethereum. You can easily use the market to generate an
+          new anonymous Ethereum wallet from your MNR, and spend it on other Ethereum-based
+          platforms using ETH coins that came from thin air. This is done entirely trustlessly.
+        </p>
+        <p>
+          This provides a service that is much easier to use than mixers, or inter-coin transfers
+          between ETH and XMR. You will not have to trust centralized exchanges to mix your ETH with others,
+          or trust them to give you XMR after you give up your ETH. Joining a mixer with BTC can
+          even be illegal if you receive a tainted coin. An MNR coin will
+          never be tainted, as both parties will always be cryptographically secured.
+        </p>
+        <p>
+          Even better, stay anonymous while only paying pennies in transaction fees. The decentralized exchange
+          will never cost you the fees that mixers will.
         </p>
       </article>
-      <article class="">
+      <article class="ribbon">
+        <h1>
+          For Developers
+        </h1>
+      </article>
+      <article class="contract-compatible">
         <div class="title">
-          <img src="" alt="">
+          <img src="images/contract-web.svg" height="250" alt="">
           <h1>Smart Contract Compatible</h1>
         </div>
         <p>
-          This is an implementation of the Monero protocol within the Smart Contract system of Ethereum.
-          Anyone will be able to build Smart Contracts that exchange with MNR to obscure their transaction
-          history - opening new opportunities for those who want to build anonymous Smart Contracts, and
-          feeding even more transactions to churn the web.<br/><br/>
-
-          The market found on this website is an example of what could be possible.
-          Each trade that this market commits will have its sender and receiver obscured.
-          MNR can be used as any Smart Contract's base coin, taking a publically disclosing
-          Smart Contract and giving it anonymity and privacy in each transaction.
+          <a href="">MNR</a> is an implementation of a modified Monero Protocol within the Smart Contract system of Ethereum,
+          with specific attention to interoperability with Ethereum Smart Contracts.
+          Anyone will be able to build Smart Contracts that exchange MNR to obscure their transaction
+          history - opening new opportunities for those who want to build anonymously interactive Smart Contracts.
+        </p>
+        <p>
+          The market found on this website is a great proof of concept for what is possible.
+          This market runs exclusively off of a smart contract located <a href="">here</a>.
+          Each trade that occurs will have its sender and receiver obscured.
+          MNR can be used as any Smart Contract's base coin, giving anonymity and
+          privacy in each transaction.
+        </p>
+        <p>
+          The entire repository is visible 
         </p>
       </article>
     </section>
+    <footer>
+
+    </footer>
   </main>
 </body>

@@ -1,0 +1,13 @@
+<svg version="1.1" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <g>
+    <path d="m99.5 50a49.5 49.5 0 1 0 -2.475e-5 0.0495z" fill="#fff" paint-order="stroke fill markers"/>
+    <path d="m89.826 80.23a50 50 0 0 1 -79.653 -2e-14l19.826-1e-14v-25l20 12 20-12v25z" fill="#4c4c4c" paint-order="stroke fill markers"/>
+    <path d="m94.852 72.097a50 50 0 1 0 -89.705 -2e-14l16.719-1e-14v-31.232l28.133 16.88 28.133-16.88v31.232z" fill="#ff6b01" paint-order="stroke fill markers"/>
+    <path d="m21.867 40.865l28.633-14.1-0.5 31.48z" fill="#353535" paint-order="stroke fill markers"/>
+    <path d="m78.133 40.865l-28.133-14.1v31.48z" fill="#131313" paint-order="stroke fill markers"/>
+    <path d="m21.867 40.865l28.633-13.1-0.5-27.765z" fill="#838383" paint-order="stroke fill markers"/>
+    <path d="m78.133 40.865l-28.133-13.1v-27.765z" fill="#303030" paint-order="stroke fill markers"/>
+    <path d="m30 55.23l20 12v32.77z" fill="#838383" paint-order="stroke fill markers"/>
+    <path d="m70 55.23l-20 12v32.77z" fill="#303030" paint-order="stroke fill markers"/>
+  </g>
+</svg>

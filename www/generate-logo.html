@@ -1,0 +1,178 @@
+<script src="https://cdn.jsdelivr.net/npm/canvas2svg@1.0.16/canvas2svg.min.js"></script>
+<script type="text/javascript">
+  ggap = 0.1;
+  gmWidth = 0.4;
+  gmHeight = 0.3;
+  ginnermHeight = 0.1;
+  gEthRatio = 0.3;
+  gmRatio = 0.5;
+
+  draw = function(ct, w, h) {
+    // I'm a mathematician, so this is "good arc"
+    ct.garc = function(x, y, radius, begin, end, clockwise) {
+      this.arc(x, y, radius, 2 * Math.PI - begin, 2 * Math.PI - end, !clockwise);
+    }
+
+    var gap = ggap * w;
+    var mWidth = gmWidth * w;
+    var mHeight = gmHeight * w;
+    var innermHeight = ginnermHeight * w;
+    var mRatio = (1-gmRatio) * 60;
+
+    var epsilon = 0.5;
+
+    var radius = w / 2;
+    var overlap = 1;
+
+    var rightA = 0;
+    var leftA = Math.PI;
+    var topA = Math.PI / 2;
+    var bottomA = 3 * Math.PI / 2;
+    var lowerA = mRatio / 360 * 2 * Math.PI;
+
+    var lowerX = radius * Math.cos(lowerA);
+    var lowerY = radius * Math.sin(lowerA);
+    var upperA = Math.asin((lowerY - gap) / radius);
+    var upperX = radius * Math.cos(upperA);
+    var upperY = radius *  Math.sin(upperA);
+
+    ct.fillStyle = "#fff";
+    ct.beginPath();
+    ct.garc(radius, radius, radius - epsilon, 0, 2 * Math.PI);
+    ct.closePath();
+    ct.fill();
+
+    var lowerLeft;
+    var lowerMiddle;
+    var lowerRight;
+
+    ct.fillStyle = '#4c4c4c';
+    ct.beginPath();
+    ct.garc(radius, radius, radius, rightA - lowerA, leftA + lowerA, true);
+    var transX = (w - mWidth - 2 * (radius - lowerX)) / 2;
+    ct.lineTo(radius - lowerX + transX, w / 2 + lowerY);
+    lowerLeft = [radius - lowerX + transX, w / 2 + lowerY - mHeight];
+    lowerMiddle = [radius, w / 2 + lowerY - mHeight + innermHeight];
+    lowerRight = [radius + lowerX - transX, w / 2 + lowerY - mHeight];
+    ct.lineTo(lowerLeft[0], lowerLeft[1]);
+    ct.lineTo(lowerMiddle[0], lowerMiddle[1]);
+    ct.lineTo(lowerRight[0], lowerRight[1]);
+    ct.lineTo(radius + lowerX - transX, w / 2 + lowerY);
+    ct.closePath();
+    ct.fill();
+
+    var left;
+    var middle;
+    var right;
+
+    ct.fillStyle = '#ff6b01';
+    ct.beginPath();
+    ct.garc(radius, radius, radius, rightA - upperA, leftA + upperA);
+    ct.lineTo(radius - lowerX + transX - gap, w / 2 + lowerY - gap);
+    var pointX = radius - lowerX + transX;
+    var pointY = w / 2 + lowerY - mHeight;
+    var innerSlope = - innermHeight / (mWidth / 2);
+    var slope = - 1 / innerSlope;
+    var slopeA = Math.atan(slope);
+    var newX = pointX + gap * Math.cos(slopeA);
+    var newY = pointY - gap * Math.sin(slopeA);
+    var dX = newX - (pointX - gap);
+    newX = newX - dX;
+    newY = newY + dX * innerSlope;
+    left = [newX, newY];
+    middle = [radius, newY - (radius - newX) * innerSlope];
+    right = [w - newX, newY];
+    ct.lineTo(left[0], left[1]);
+    ct.lineTo(middle[0], middle[1]);
+    ct.lineTo(right[0], right[1]);
+    ct.lineTo(w - (radius - lowerX + transX - gap), w / 2 + lowerY - gap);
+    ct.closePath();
+    ct.fill();
+
+    var ethMiddle = [middle[0], left[1] - gEthRatio * 40];
+
+    ct.fillStyle = '#353535';
+    ct.beginPath();
+    ct.moveTo(left[0], left[1]);
+    ct.lineTo(ethMiddle[0] + epsilon, ethMiddle[1] - epsilon);
+    ct.lineTo(middle[0], middle[1] + epsilon);
+    ct.closePath();
+    ct.fill();
+
+    ct.fillStyle = '#131313';
+    ct.beginPath();
+    ct.moveTo(right[0], right[1]);
+    ct.lineTo(ethMiddle[0], ethMiddle[1] - epsilon);
+    ct.lineTo(middle[0], middle[1] + epsilon);
+    ct.closePath();
+    ct.fill();
+
+    ct.fillStyle = '#838383';
+    ct.beginPath();
+    ct.moveTo(left[0], left[1]);
+    ct.lineTo(ethMiddle[0] + epsilon, ethMiddle[1] + epsilon);
+    ct.lineTo(radius, 0);
+    ct.closePath();
+    ct.fill();
+
+    ct.fillStyle = '#303030';
+    ct.beginPath();
+    ct.moveTo(right[0], right[1]);
+    ct.lineTo(ethMiddle[0], ethMiddle[1] + epsilon);
+    ct.lineTo(radius, 0);
+    ct.closePath();
+    ct.fill();
+
+    ct.fillStyle = '#838383';
+    ct.beginPath();
+    ct.moveTo(lowerLeft[0], lowerLeft[1]);
+    ct.lineTo(lowerMiddle[0], lowerMiddle[1]);
+    ct.lineTo(radius, w);
+    ct.closePath();
+    ct.fill();
+
+    ct.fillStyle = '#303030';
+    ct.beginPath();
+    ct.moveTo(lowerRight[0], lowerRight[1]);
+    ct.lineTo(lowerMiddle[0], lowerMiddle[1]);
+    ct.lineTo(radius, w);
+    ct.closePath();
+    ct.fill();
+  }
+
+  update = function() {
+  ggap = document.getElementById("gap").value / 100 / 7.5;
+  gmWidth = document.getElementById("mWidth").value / 100;
+  gmHeight = document.getElementById("mHeight").value / 100;
+  ginnermHeight = document.getElementById("innermHeight").value / 100 / 2;
+  gEthRatio = document.getElementById("ethRatio").value / 100;
+  gmRatio = document.getElementById("mRatio").value / 100;
+
+  var cv = document.getElementById('cv');
+  var ct = cv.getContext('2d');
+
+  draw(ct, cv.width, cv.height);
+  }
+
+  getSVG = function() {
+  var ct = new C2S(100,100);
+  draw(ct, 100, 100);
+  var myRectangle = ct.getSerializedSvg(true);
+  console.log(myRectangle)
+  }
+
+  setInterval(update, 10);
+</script>
+<canvas id="cv" width="200" height="200"></canvas>
+<div class="slidecontainer">
+  Gap: <input type="range" min="1" max="100" value="61" class="slider" id="gap"><br/>
+  mWidth: <input type="range" min="1" max="100" value="40" class="slider" id="mWidth"><br/>
+  mHeight: <input type="range" min="1" max="100" value="25" class="slider" id="mHeight"><br/>
+  innermHeight: <input type="range" min="1" max="100" value="24" class="slider" id="innermHeight"><br/>
+  ethRatio: <input type="range" min="1" max="100" value="34" class="slider" id="ethRatio"><br/>
+  mRatio: <input type="range" min="1" max="100" value="38" class="slider" id="mRatio">
+</div>
+<button onclick="getSVG()">
+SVG
+</button>
+<br/>
