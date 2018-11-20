@@ -47,6 +47,10 @@ header nav {
   display: flex;
 }
 
+header nav a {
+  color: white;
+}
+
 header nav ul {
   margin: 0;
   list-style-type: none;
@@ -98,6 +102,7 @@ header nav li {
 
 .benefits .untraceable h1 {
   font-weight: 400;
+  text-align: center;
 }
 
 .benefits .untraceable p {
@@ -145,4 +150,9 @@ header nav li {
 
 .benefits article h1 {
   font-size: 2.75em;
+}
+
+#market {
+  margin: 4em 4em 1em 1em;
+  height: 100vh;
 }
