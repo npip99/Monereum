@@ -1,0 +1,166 @@
+pragma solidity ^0.4.0;
+
+contract MonereumBlockchain {
+    uint256 constant MIXIN = 5;
+    uint256 constant R = 2;
+
+    uint256 constant p = 0x83efdbcbb2884023e9c8c563dc090e57;
+    uint256 public constant q = p - 1;
+    // q is semiprime
+    // q = 2 * 0x41f7ede5d9442011f4e462b1ee04872b
+    uint256 constant g = 0x455a91581e4e2150b41cf8e9e153e7ad;
+    uint256 constant h = uint256(keccak256(g)) % p;
+
+    uint256 constant lowerMask = uint256(~uint128(0));
+
+    mapping(uint256 => uint256) transactionSrcCommitment;
+    mapping(uint256 => bool) usedImages;
+
+    function permuteInP(uint256 inp) returns (uint256) {
+        return uint256(keccak256(inp)) % p;
+    }
+
+    function exp(uint256 a, uint256 b) returns (uint256 ab) {
+        // Compiler has an issue with constants
+        uint256 notConstP = p;
+        assembly {
+            // define pointer
+            let ptr := mload(0x40)
+            // store data assembly-favouring ways
+            mstore(ptr, 0x20)             // Length of Base
+            mstore(add(ptr, 0x20), 0x20)  // Length of Exponent
+            mstore(add(ptr, 0x40), 0x20)  // Length of Modulus
+            mstore(add(ptr, 0x60), a)  // Base
+            mstore(add(ptr, 0x80), b)     // Exponent
+            mstore(add(ptr, 0xa0), notConstP)     // Modulus
+            // call modexp precompile! -- old school gas handling
+            let success := call(sub(gas, 2000), 0x05, 0, ptr, 0xc0, ptr, 0x20)
+            // gas fiddling
+            switch success case 0 {
+            revert(0, 0)
+            }
+            // data
+            ab := mload(ptr)
+        }
+    }
+
+    function inv(uint256 a) returns (uint256) {
+        return exp(a, p - 2);
+    }
+
+    function mult(uint256 a, uint256 b) returns (uint256) {
+        return (a * b) % p;
+    }
+
+    function combine(uint256 base1, uint256 exp1, uint256 base2, uint256 exp2) returns (uint256) {
+        return mult(
+            exp(base1, exp1),
+            exp(base2, exp2)
+        );
+    }
+
+    function isInP(uint256 a) returns (bool) {
+        return a != 0 && (a < p);
+    }
+
+    function isInQ(uint256 a) returns (bool) {
+        return a != 0 && (a < p - 1);
+    }
+
+    function send(
+        uint256[MIXIN][] funds,
+        uint256[] keyImage,
+        uint256[] commitment,
+        uint256[] borromean,
+        uint256[MIXIN][] imageFundProofs,
+        uint256[MIXIN][] commitmentProofs,
+        uint256[] outputSrc,
+        uint256[] outputDest,
+        uint256[] outputCommitment,
+        uint256 minerFee,
+        uint256 minerPub
+    ) public {
+        uint256 netTransfer = 0;
+        uint256 outputSignature = uint256(keccak256(
+            outputSrc[r],
+            outputDest[r],
+            outputCommitment[r],
+            minerFee
+        ));
+        for( uint256 r = 0; r < R; r++ ) {
+            require(!usedImages[keyImage[r]], "Image has already been used");
+            require(isInP(commitment[r]), "Commitment is not modulo P");
+            uint256 prevHash = borromean[r];
+            require(isInQ(prevHash), "Borromean is not modulo Q");
+            for( uint256 i = 0; i < MIXIN; i++ ) {
+                require(isInP(funds[r][i]), "Funds is not modulo P");
+                uint256 imageFundProof = imageFundProofs[r][i];
+                require(isInQ(imageFundProof), "imageFundProof is not modulo Q");
+                require(isInQ(commitmentProofs[r][i]), "commitmentProof is not modulo Q");
+
+                // This hash can only be controlled once
+                // Upon picking values, the rest collapse and discrete log
+                // must be achieved on each item to close the loop
+                uint256 commitmentDiff = mult(commitment[r], inv(transactionSrcCommitment[funds[r][i]] & lowerMask));
+                uint256 hash = uint256(keccak256(
+                    combine(
+                        funds[r][i], prevHash,
+                        // Verify knowledge of logG(fundDest)
+                        g, imageFundProof
+                    ),
+                    combine(
+                        keyImage[r], prevHash,
+                        // Verify that keyImages[r] = H(fundDest) ^ logG(fundDest)
+                        permuteInP(funds[r][i]), imageFundProof
+                    ),
+                    combine(
+                        // Verify knowledge of logG(commitments[r] - commitment[fundDest])
+                        commitmentDiff, prevHash,
+                        g, commitmentProofs[r][i]
+                    ),
+                    // Verify recipients
+                    outputSignature
+                ));
+                // Hashes must be odd so that
+                // I = H(fundDest) ^ (logG(fundDest) + q/2) doesn't also verify
+                // Noting that q/2 * 2 = q, which gets ignored in exponent
+                hash = (hash % q) | 1;
+
+                if (i == MIXIN - 1) {
+                    require(borromean[r] == hash, "Hash does not match Borromean");
+                } else {
+                    prevHash = hash;
+                }
+            }
+            usedImages[keyImage[r]] = true;
+            netTransfer += commitment[r];
+            netTransfer %= p;
+        }
+
+        for (uint256 o = 0; o < R; o++) {
+            require(outputSrc[r] < p);
+            require(isInP(commitment[r]));
+            netTransfer = (p + netTransfer - commitment[r]) % p;
+            sendTransaction(outputSrc[r], outputDest[r], commitment[r]);
+        }
+
+        uint256 minerCommitment = exp(h, minerFee);
+        netTransfer = (p + netTransfer - minerCommitment) % p;
+        require(netTransfer == 0, "Net Transfer was not equal to zero");
+
+        sendTransaction(0, minerPub, minerCommitment);
+    }
+
+    function sendTransaction(
+        uint256 src,
+        uint256 dest,
+        uint256 commitment
+    ) {
+        transactionSrcCommitment[dest] = (src << 128) | commitment;
+        emit LogTransaction(src, dest, commitment);
+    }
+
+    event LogTransaction(uint256 src, uint256 dest, uint256 commitment);
+
+    //function mint()
+}
