@@ -3,6 +3,53 @@ pragma solidity 0.4.24;
 import "./MonereumMemory.sol";
 import "./MonereumVerifier.sol";
 
+/*
+Transaction Format
+==================
+
+LogTransaction
+---------------
+1. Sending to (A, B)
+2. Generate random r
+Src = rG = R
+Dest = hash(rA)G + B = hash(aR)G + B, with s = aR = rA
+Commitment = hash^2(s)G + bH
+CommitmentAmount = (hash^3(s) + b) mod q
+
+Alternatively, (Commitment, CommitmentAmount) = (bH, b)
+Alternatively, (Src, Dest) = ([0, 0], P), where P is a given public key
+
+TransactionID = hash(Dest)
+
+LogRingProof
+------------
+funds[]
+keyImage
+commitment
+borromean
+imageFundProofs[]
+commitmentProofs[]
+outputHash
+
+LogRingGroup
+------------
+outputIDs
+ringHashes
+
+LogRingGroup connects LogTransaction's hashes (outputIDs), to LogRingProof's hashes (ringHashes)
+
+LogRangeProof
+-------------
+ringGroupHash
+outputIDs
+commitment
+rangeCommitments
+rangeBorromeans
+rangeProofs
+indices
+
+*/
+
 contract MonereumBlockchain is MonereumMemory {
     MonereumVerifier mv;
 
@@ -25,7 +72,8 @@ contract MonereumBlockchain is MonereumMemory {
         emit LogTransaction(
             [uint256(0), uint256(0)],
             dest,
-            transactions[transactionID].commitment
+            transactions[transactionID].commitment,
+            amount
         );
     }
 
@@ -380,7 +428,7 @@ contract MonereumBlockchain is MonereumMemory {
 
     // Maps N input rings, to M output transactions
     // All lengths are verified to be consistent
-    // outputHash = hash(outputDest, outputSrc, outputCommitments, minerFee)
+    // outputHash = hash(outputDest, outputSrc, outputCommitments, commitmentAmounts, minerFee)
     // Each ringHash is a hash of a ringProof:
     //     funds <- Verified: Status of Hash(funds_i) is Accepted
     //     keyImage <- Verified: usedImages[hash(keyImage)] is false. It is then updated to true.
@@ -417,6 +465,7 @@ contract MonereumBlockchain is MonereumMemory {
         uint256[2][] outputDests,
         uint256[2][] outputSrcs,
         uint256[2][] outputCommitments,
+        uint256[] commitmentAmounts,
         uint256 minerFee,
         // Miner
         uint256[2] minerDest
@@ -441,7 +490,7 @@ contract MonereumBlockchain is MonereumMemory {
         v.outputHash = uint256(keccak256(
             // encodePacked loses length information so we must use .encode everywhere
             // Else outputsDests[-1] could be shifted into outputSrcs[0] with same hash
-            abi.encode(outputDests, outputSrcs, outputCommitments, minerFee)
+            abi.encode(outputDests, outputSrcs, outputCommitments, commitmentAmounts, minerFee)
         ));
 
         v.ringHashes = new uint256[](v.R);
@@ -505,7 +554,8 @@ contract MonereumBlockchain is MonereumMemory {
             emit LogTransaction(
                 outputSrcs[v.i],
                 outputDests[v.i],
-                outputCommitments[v.i]
+                outputCommitments[v.i],
+                commitmentAmounts[v.i]
             );
             require(v.i == 0 || rangeProofHashes[v.i - 1] < rangeProofHashes[v.i], "Range hashes must be in order");
             rangeProofCommitment[v.ringGroupHash][rangeProofHashes[v.i]] = hashP(outputCommitments[v.i]);
@@ -528,6 +578,12 @@ contract MonereumBlockchain is MonereumMemory {
         require(transactions[v.outputID].status == Status.NonExistant, "Miner transaction already exists");
         transactions[v.outputID].commitment = v.minerFeeCommitment;
         transactions[v.outputID].status = Status.Pending;
+        emit LogTransaction(
+            [uint256(0), uint256(0)],
+            minerDest,
+            v.minerFeeCommitment,
+            minerFee
+        );
 
         rangeProofsRemaining[v.ringGroupHash] = v.numOutputs;
 
@@ -539,7 +595,8 @@ contract MonereumBlockchain is MonereumMemory {
     event LogTransaction(
         uint256[2] src,
         uint256[2] dest,
-        uint256[2] commitment
+        uint256[2] commitment,
+        uint256 commitmentAmount
     );
 
     event LogRingGroup(

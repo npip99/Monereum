@@ -1,1 +1,5 @@
 contracts/node_modules
+www/js/static
+www/js/node_modules
+www/js/npm-debug.log
+www/js/watch.log
