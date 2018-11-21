@@ -16,8 +16,10 @@ Dest = hash(rA)G + B = hash(aR)G + B, with s = aR = rA
 Commitment = hash^2(s)G + bH
 CommitmentAmount = (hash^3(s) + b) mod q
 
-Alternatively, (Commitment, CommitmentAmount) = (bH, b)
-Alternatively, (Src, Dest) = ([0, 0], P), where P is a given public key
+Alternatively, (Commitment, CommitmentAmount) = (bH, b), which means the amount is public.
+
+Alternatively, Dest = P, where P is a public key you were given.
+It is important to still generate Src so that you can sign the transaction.
 
 TransactionID = hash(Dest)
 
