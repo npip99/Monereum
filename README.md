@@ -4,13 +4,15 @@
 
 This repository implements Monero with RingCT on top of the Ethereum blockchain.
 
-For the proofs, it utilizes Borromean Ring Signatures as a method of authentication, Key Images to prevent double-spend attacks, along with Pedersen Commitments to hide the amounts being spent (While still being able to check that they sum to zero). Range Proofs also utilize a borromean ring signature on each bit of the commitment to ensure that the commitment falls within a range that cannot overflow. All of these techniques are discussed in-depth within the Monero whitepaper.
+Monereum, like Monero, utilizes Borromean Ring Signatures as a method of authentication, Key Images to prevent double-spend attacks, and Pedersen Commitments to hide the amounts being spent (While still being able to check that they sum to zero). Range Proofs also utilize a borromean ring signature on each bit of the commitment to ensure that the commitment falls within a range that cannot overflow. All of these techniques are discussed in-depth within the Monero whitepaper, so they will not be discussed here.
 
-Making Monereum transactions yourself would reveal your ethereum address. Thus, transactions include a signed miner fee that is expected to be approximately equal to the gas cost of the transaction. This is broadcasted publically behind a Tor connection or a trusted web service that does not save IPs. Then, a miner claims the fee by submitting the transaction for you.
+Using your own ethereum address for Monereum transactions would reveal who you are. Thus, transactions include a miner fee that is expected to be approximately equal to the gas cost of the transaction. A signed transaction is broadcasted publically behind a Tor connection, or a trusted web service that does not save IPs (Preferably the former for full trustlessness). Then, a miner claims the fee by submitting the transaction for you.
 
-While the range and ring proofs can be made within the block limit, they remain expensive. Therefore, transactions require posting a 1 ETH bounty, along with an MNR bounty that's 1/16th of the MNR being transferred (From highest bit of the range proofs). Open disputes are taken for the next 2 minutes, where disputing also requires posting a 1 ETH bounty. The winner of the dispute is awarded 0.5 ETH (And if the disputer wins he is awarded the MNR bounty as well). This bounty remains much higher than the gas price of proof, and guarantees unprofitability of artificial gas price injection by a wealthy individual. This system guarantees that no one's legitimate transactions will be delayed by a false accusation, but all attempts to profitably create illegitimate transactions will be disputed, and never make it into the blockchain.
+While the range and ring proofs can be made within the block limit, they remain expensive. Therefore, transactions require the miner to post a 1 ETH bounty, along with an MNR bounty that's guaranteed to be at least 1/16th of the MNR being transferred (Deduced from highest bit of the range proofs). Open disputes are taken over the next 2 minutes, where disputing also requires posting a 1 ETH bounty. The winner of the dispute is awarded 0.5 ETH (And if the disputer wins he is awarded the MNR bounty as well). The ETH bounty is much higher than the gas price of the proof, and the MNR bounty guarantees reporter profitability during artificial gas price injection after a large MNR duplication attempt. Overall, this system creates a situation where no one's legitimate transactions will be delayed by a false accusation, but all attempts to profitably create illegitimate transactions will be disputed, never making it into the Monereum blockchain.
 
-Additionally, anyone may hold a standard ERC20 Token of Monereum, including contracts. An encrypted version of a Monereum coin can be converted into an ERC20 Token easily, and vice-versa. This allows the entire realm of Turing-Complete opportunities to be applied in a way where those interacting with the contract remain private, and the token remains compatible with contracts that expect ERC20 compliance. Allowances can also be made to Monereum public addresses, so that transactions to/from the ERC20 version remain anonymous.
+Additionally, anyone may hold a standard ERC20 Token of Monereum, including contracts. An encrypted version of a Monereum coin can be converted into an ERC20 Token easily, and vice-versa. This allows the entire realm of Turing-Complete opportunities to be applied in a way where those interacting with the contract remain private. Allowances can also be made to Monereum public addresses, so that transactions to/from the ERC20 version remain anonymous.
+
+A public address to 256bit coordinates (X, Y) can be written as 04XY, 03X if Y is odd, 02X if Y is even, and 01X if X is an ERC20 address.
 
 ## Development Environment
 
@@ -26,6 +28,10 @@ sudo npm i -g truffle ganache-cli browserify watchify uglify-js babelify babel-p
 ## How Monereum Works
 
 I believe whitepapers to be rather opaque, so I'm providing an explanation of the protocol in a way that should be easier to digest.
+
+### Keys
+
+Each public key consists of a view key and a spend key. You may give the view key to someone to allow them to see incoming transactions and verify transaction receipts. A wallet can have many public keys, and a given view key only works for a single public key. The spend key is require to spend the coin. Keys are generated such that the view key can be deduced from the spend key. Someone with a view key cannot see outgoing transactions.
 
 ### Transaction Rings
 
@@ -55,25 +61,43 @@ When the timer is complete, anyone can commit the output coins. Upon commiting t
 
 We destroy 0.5 ETH upon a dispute to disincentivize disputing with oneself to delay a transaction. Additionally, the proving is separated from the disputing as proving is expensive. It is important that the initial dispute is cheap so that disputes may still be made during gas price attacks, while still keeping the miner's bounty as low as possible.
 
+### ERC20 Transactions
+
+ERC20 tokens are versatile, but care must be taken when converting to and from Monero coins, since ERC20 transactions are entirely transparent.
+
+Turning an ERC20 token into encrypted Monero simply requires the sender to have the alloted allowance. Note that amount cannot be encrypted as it must be deducted from the balance, but this is not relevant as spending the token will always be hidden in a ring.
+
+Note: It is possible to hide all balances as pedersen commitments, but this would make the `balanceOf` operation impossible. I would like to eventually see an Monereum compatible implementation of a quasi-ERC20 token that hides balances, however.
+
+Turning an encrypted monero coin into an ERC20 token requires signing the coin with the key image, which gets verified on the spot. This is of course revealing, so wallet implementations need to ensure that only funds that have been self-mixed are used. The self-mixing should be entirely abstracted away. Please note that using "spare change" is not self-mixing, since if a previous transaction has a spent coin A, and a spare change coin B, then the owner of A will be able to see when you turn B into an ERC20 token, releaving yourself to the owner of A.
+
+### ERC20 Allowances to Monereum Addresses
+
+Allowances may also be made to Monereum public addresses, allowing them to spend your token by signing the transaction with their private key. This uses the miner fee model, so that an ethereum address is not required.
+
 ### Transaction Cancelling
 
-Ethereum allows cancelling transactions through nonce fiddling, though not many front-ends implement this behavior. Not knowing when a transaction will clear is quite limiting when a gas price is accidentally set too low, so I found it important to verify the ease of transaction cancelling.
+Ethereum allows cancelling transactions through nonce fiddling, though not many front-ends implement this behavior. Not knowing when a transaction will clear is quite annoying when a gas price is accidentally set too low, so I found it important to verify the ease of transaction cancelling while keeping anonymity.
 
-If a miner fee was too low, a transaction is cancelled by simply sending coins to yourself using one of the key images, and using a large enough miner fee. Key image uniqueness is verified upon submission to prevent an adversary from forcing a miner to lose his bounty (By submitting the transaction before him). It will be publically known that a transaction was cancelled, and the canceled and cancelee transactions will be linked. No other information will be revealed, however. Sending transactions to oneself will unlink the cancelee. Front-ends should implement this self-sending as part of the cancelling procedure, and should still use `M = 2` to remain hidden.
+If a miner fee was too low, a transaction is cancelled by simply sending coins to yourself using one of the key images, and using a large enough miner fee. Key image uniqueness is verified upon submission to prevent an adversary from forcing a miner to lose his bounty (By submitting the transaction before him). It will be publically known that a transaction was cancelled, and the canceled and cancelee transactions will be linked. No other information will be revealed, however. Self-mixing will unlink the cancelee. Front-ends should implement this self-sending as part of the cancelling procedure, and should still use `M = 2` output coins to remain hidden.
+
+### Transaction Receipts
+
+Every output coin will come with a receipt that you may send to the receiver. Anyone else who views the receipt will not be able to figure out which transaction the receipt belongs to. However, anyone with the view key of the receiver can verify that only the person who sent the transaction could have generated the receipt.
 
 ### Properties of Monereum
 
 From the protocol described above, we see that any publically disclosed correct transaction will resolve within `(N + 2)(e + T)` seconds, where T is the pending time, N is the number of disputes, and e is the time it takes for someone to call a function that they know will give them free money, including transaction delay. Additionally, this formula shows that any correct transaction that is submitted must eventually resolve. Also, we see that any false transaction is guaranteed to be disputed within time `e`. By having `T > e`, we maintain that all false transactions must be disputed. We make `T` equal to two minutes, under the assumption that `e` is at worst one minute (With bounties high enough to guarantee this during a gas price attack). This still leaves `T + N(e + T)` at a reasonable order of magnitude for a miner to wait for his bounty, though in the vast majority of cases this should simply equal `T`.
 
-We must also note that the bounty system is secure against adversaries looking for profit. Disputers have `T - e` seconds to report an illegitimate transaction, which is 4 blocks, or 3 blocks to be safe. With worst case of 50% centralization in the Ethereum network, we see that there is a 12.5% chance that three blocks could come from a colluding individual. If an adversary tries to falsly create `M` MNR, then the adversary would have to try to inject at most `M` MNR in ETH to artificially raise gas prices. In 87.5% of cases, there is an opportunity for reporters to report. The cost of reporting would be `p + g / L * I`, where g is the gas cost of reporting, L is the gas limit, p is the gas cost without artificial injection, and M is the ETH being injected to increase gas prices. This is evalutated to be at worst `0.15 ETH + 1 / 32 * M`. Clearly, the `0.5 ETH + M / 16` bounty is much larger than this, so reporters are guaranteed to report in this case. The adversary thus loses `M + I` MNR 87.5% of the time, and gains `M - I` MNR 12.5% of the time, which is again clearly disadvantageous. If someone chooses to generate MNR with gas price injection, even though it would lose money in the long run, we accept the newly created MNR as legitimate MNR since disputes are not accepted after a transaction is accepted. This allows for an extremely inefficient minting procedure, so MNR is technically a variable supply token in this regard.
+We must also note that the bounty system is secure against adversaries looking to profit by preventing disputers. Disputers have `T - e` seconds to report an illegitimate transaction, which is 4 blocks, or 3 blocks to be safe. With worst case of 50% centralization in the Ethereum network, we see that there is a 12.5% chance that three blocks could come from a colluding individual. If an adversary tries to falsly create `M` MNR, then the adversary would have to try to inject at most `M` MNR in ETH to artificially raise gas prices. In 87.5% of cases, there is an opportunity for reporters to report. The cost of reporting would be `p + g / L * I`, where g is the gas cost of reporting, L is the gas limit, p is the gas cost without artificial injection, and M is the ETH being injected to increase gas prices. This is evalutated to be at worst `0.15 ETH + 1 / 32 * M`. Clearly, the `0.5 ETH + M / 16` bounty is much larger than this, so reporters are guaranteed to report in this case. The adversary thus loses `M + I` MNR 87.5% of the time, and gains `M - I` MNR 12.5% of the time, which is again clearly disadvantageous. If someone chooses to generate MNR with gas price injection, even though it would lose money in the long run, we accept the newly created MNR as legitimate MNR since disputes are not accepted after a transaction is accepted. This allows for an extremely inefficient minting procedure, so MNR is technically a variable supply token in this regard.
 
-Notice for developers: If a contract is using MNR and has a scheme that punishes users for taking too long (In say, a game of mental poker), then it is important that they keep the `(N + 2)(e + T)` limit in mind. The front-end should organize the transaction amounts beforehand, so that they can easily be transferred without any proofs and would thus take at worst `e` seconds. Alternatively, such contracts could allow `(N + 2)(e + T)` time to pass penalty free, but this may be too limiting for certain contract objectives. Again, Ethereum itself can be DDOSed by a sufficiently weathy individual, so this shouldn't be an issue specific to MNR.
+Notice for developers: If a contract is using MNR and has a scheme that punishes users for taking too long (In say, a game of mental poker), then it is important that they keep the `(N + 2)(e + T)` limit in mind. The front-end should organize the transaction amounts beforehand, so that they can easily be transferred without any proofs and would thus take at worst `e` seconds. Alternatively, such contracts could allow `(N + 2)(e + T)` time to pass penalty free, but this may be too limiting for certain contract objectives. Ethereum itself can be DDOSed by a sufficiently weathy individual paying high enough gas prices, so this shouldn't be an issue specific to MNR.
 
 ## Interacting with the MNR contract
 
 ### Encryping a coin
 
-If you wish to create a coin sending an amount `b` to a public key `(A, B)`, then you must first choose a random scalar `r`. Then, you must calculate the following:
+If you wish to create a coin sending an amount `b` to a public key `(A, B)`, then you must first choose a random scalar `r`. Then, you calculate the following:
 
 ```
 Src = rG = R
@@ -84,6 +108,8 @@ return (Src, Dest, Commitment, CommitmentAmount)
 ```
 
 In this case, `hash^n(x)` means hash iteratively on itself `n` times.
+
+Note: If `r` is not very random or is publically revealed, then anyone may view the coin's owner. However, it remains that no one can spend it. The receiver does not have to worry about this, since spending the coin will be anonymized with other coins in a ring signature. This `r` is used to sign the transaction to generate a receipt, so that receivers know who sent it.
 
 ### Decrypting a coin
 
@@ -99,11 +125,19 @@ require(Commitment == pedersenBlinding * G + amount * H, "Incorrect amount")
 return (privateKey, pedersenBlinding, amount)
 ```
 
-You may note that if `b` is not available, then `(pedersenBlinding, amount)` can still be calculated. The value `a` is the view key, while the value `b` is the spend key
+You may note that if `b` is not available, then `(pedersenBlinding, amount)` can still be calculated. The value `a` is the view key, while the value `b` is the spend key.
+
+### Transaction Receipts
+
+The diffie-helman exchange that occurs when transferring `rA = aR` allows for easy receipt generation. Simply send the receipt `hash^4(s)` to prove that you sent the message. Only someone with the view key will be able to link this receipt to a transaction, which allows the receipt to be transmitted over an insecure channel. Using lower iterations of the hash allows someone who sees the receipt to decrypt parts of the coin, so it is important to only use `hash^4(s)`.
+
+### Transaction Signatures
+
+A transaction is signed with the random number `r` that was generated as the Src. A transaction is signed by generating `(h, I)` such that `H(hR + I) = h`. Note that this is trivial if you know `r`, as you can pick a desired `H(aG) = h`, and solve `h * r + b = a` to derive `I = bG`. It is easy to extend this to general signatures of a message `m` by requesting `(h, I)` such that `H(hR + I, m) = h`.
 
 ### Generating transaction proofs
 
-A transaction will take several input coins and several output coins. Our goal is to create
+A transaction will take `N` input rings of `5` coins each, and `M` output coins. Our goal is to create a valid
 
 ```
 Coin[N] funds
@@ -113,4 +147,5 @@ Coin[M] outputs
 int minerFee
 ```
 
-### Signing a transaction
+### Verifying transaction proofs
+
