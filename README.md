@@ -2,13 +2,17 @@
 
 ## Description
 
-This repository implements Monero on top of the Ethereum blockchain.
+This repository implements Monero with RingCT on top of the Ethereum blockchain.
 
 For the proofs, it utilizes Borromean Ring Signatures as a method of authentication, Key Images to prevent double-spend attacks, along with Pedersen Commitments to hide the amounts being spent (While still being able to check that they sum to zero). Range Proofs also utilize a borromean ring signature on each bit of the commitment to ensure that the commitment falls within a range that cannot overflow. All of these techniques are discussed in-depth within the Monero whitepaper.
 
-While such proofs can be made within the block limit, they remain expensive. Therefore, transactions require posting a 1 ETH bounty, along with an MNR bounty that's 1/16th of the MNR being transferred (The highest bit of the range proofs). Open disputes are taken for the next 2 minutes, where disputing also requires posting a 1 ETH bounty. The winner of the dispute is awarded 0.5 ETH, which remains much higher than the gas fees from executing the proof. This means that no one's legitimate transactions will be delayed by a false accusation, but all illegitimate transactions will be disputed and never make it into the blockchain.
+Making Monereum transactions yourself would reveal your ethereum address. Thus, transactions include a signed miner fee that is expected to be approximately equal to the gas cost of the transaction. This is broadcasted publically behind a Tor connection or a trusted web service that does not save IPs. Then, a miner claims the fee by submitting the transaction for you.
 
-## Development
+While the range and ring proofs can be made within the block limit, they remain expensive. Therefore, transactions require posting a 1 ETH bounty, along with an MNR bounty that's 1/16th of the MNR being transferred (From highest bit of the range proofs). Open disputes are taken for the next 2 minutes, where disputing also requires posting a 1 ETH bounty. The winner of the dispute is awarded 0.5 ETH (And if the disputer wins he is awarded the MNR bounty as well). This bounty remains much higher than the gas price of proof, and guarantees unprofitability of artificial gas price injection by a wealthy individual. This system guarantees that no one's legitimate transactions will be delayed by a false accusation, but all attempts to profitably create illegitimate transactions will be disputed, and never make it into the blockchain.
+
+Additionally, anyone may hold a standard ERC20 Token of Monereum, including contracts. An encrypted version of a Monereum coin can be converted into an ERC20 Token easily, and vice-versa. This allows the entire realm of Turing-Complete opportunities to be applied in a way where those interacting with the contract remain private, and the token remains compatible with contracts that expect ERC20 compliance. Allowances can also be made to Monereum public addresses, so that transactions to/from the ERC20 version remain anonymous.
+
+## Development Environment
 
 In order to develop on this repository, please install `npm`:
 ```
@@ -35,7 +39,7 @@ The algorithm for verifing ring proofs and range proofs, along with correctness 
 
 When an owner of Monereum coins wishes to make a transaction, (s)he can broadcast the transaction data behind a Tor network.
 
-We note that the miner's public key was not signed in the ring proofs, only the fee value itself, so anyone may claim the miner fee. If the transaction proofs are legitimate, and the miner fee `f` is greater than the estimated gas fees of commiting the transaction (Even by a negligible amount), it would be economically beneficial for anyone to submit the transaction. Thus, the transaction will get submitted by someone (the "miner").
+We note that the miner's public key was not signed in the ring proofs, only the fee value itself, so anyone may claim the miner fee. If the transaction proofs are legitimate, and the miner fee `f` is greater than the estimated gas fees of commiting the transaction (Even by a negligible amount), then it would be economically beneficial for anyone to submit the transaction. Thus, the transaction will indeed get submitted by someone (the "miner"). This is important, as having to submit a transaction yourself will reveal your ethereum address.
 
 ### Bounties
 
@@ -49,11 +53,13 @@ Though the disputer posts a 1 ETH bounty, this isn't necessary to prove correctn
 
 When the timer is complete, anyone can commit the output coins. Upon commiting the output coins, the coins are then "Accepted", and no further disputes are possible. Additionally, the miner's 1 ETH bounty is returned. However, if two times the pending time has elapsed, then the next person who commits the output coins may claim the miner's bounty. This forces a transaction to resolve quickly.
 
-We destroy 0.5 ETH upon a dispute to disincentivize disputing with oneself to delay a transaction. Additionally, the proving is separated from the disputing as proving is expensive. It is important that the initial dispute is cheap so that disputes may still be made in periods of high network activity (During an ICO, for example).
+We destroy 0.5 ETH upon a dispute to disincentivize disputing with oneself to delay a transaction. Additionally, the proving is separated from the disputing as proving is expensive. It is important that the initial dispute is cheap so that disputes may still be made during gas price attacks, while still keeping the miner's bounty as low as possible.
 
 ### Transaction Cancelling
 
-If a miner fee was too low, a transaction may still be cancelled at any time before a miner submits it. This is done by simply sending coins to yourself using one of the key images, and using a large enough miner fee. Key image uniqueness is verified upon submission to prevent an adversary from forcing a miner to lose his bounty (By submitting the transaction before him). It will be publically known that a transaction was cancelled, and the canceled and cancelee transactions will be linked. No other information will be revealed, however. Additionally, sending transactions to oneself will unlink the cancelee. Front-ends should implement this self-sending as part of the cancelling procedure, and should still use `M = 2` to remain hidden.
+Ethereum allows cancelling transactions through nonce fiddling, though not many front-ends implement this behavior. Not knowing when a transaction will clear is quite limiting when a gas price is accidentally set too low, so I found it important to verify the ease of transaction cancelling.
+
+If a miner fee was too low, a transaction is cancelled by simply sending coins to yourself using one of the key images, and using a large enough miner fee. Key image uniqueness is verified upon submission to prevent an adversary from forcing a miner to lose his bounty (By submitting the transaction before him). It will be publically known that a transaction was cancelled, and the canceled and cancelee transactions will be linked. No other information will be revealed, however. Sending transactions to oneself will unlink the cancelee. Front-ends should implement this self-sending as part of the cancelling procedure, and should still use `M = 2` to remain hidden.
 
 ### Properties of Monereum
 
