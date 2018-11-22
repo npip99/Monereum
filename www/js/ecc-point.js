@@ -45,6 +45,20 @@ class ECCPoint {
 				}
     }
 
+		hashInP() {
+			if (this.hashedInP) {
+				return this.hashedInP
+			}
+			const pHash = hash(this).toArray(2).value
+			let hashGenerator = ECCPoint.zero
+			for (let i = 0; i < 128; i++) {
+				if (pHash[i] === 1) {
+					hashGenerator = hashGenerator.plus(ECCPoint.hashSet[i])
+				}
+			}
+			return this.hashedInP = hashGenerator
+		}
+
     eq(pt) {
     		const p = ECCPoint.p
 				const z12 = this.z.square()
@@ -171,27 +185,46 @@ class ECCPoint {
 			const zinv2 = zinv.times(zinv)
 			const zinv3 = zinv2.times(zinv)
 			let x = this.x.times(zinv2).mod(p)
-			if (x.lt(0)) {
+			if (x.isNegative()) {
 				x = x.plus(p)
 			}
 			let y = this.y.times(zinv3).mod(p)
-			if (y.lt(0)) {
+			if (y.isNegative()) {
 				y = y.plus(p)
 			}
-			return new ECCPoint(x, y);
+			this.x = x
+			this.y = y
+			this.z = bigInt[1]
+			this.zz = bigInt[1]
+			return this;
 		}
 
     toString() {
 			const aff = this.affine()
     	return "ECCPoint(" + aff.x.toString() + ", " + aff.y.toString() + ")"
     }
+
+		toJSON() {
+			const aff = this.affine()
+			return {
+				x:aff.x.toString(),
+				y:aff.y.toString()
+			}
+		}
 }
 
 ECCPoint.p = bigInt("21888242871839275222246405745257275088696311157297823662689037894645226208583");
 ECCPoint.q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
 ECCPoint.g = new ECCPoint(1, 2);
-const hashG = hash(ECCPoint.g)
-ECCPoint.h = new ECCPoint(hashG, ECCPoint.findNextY(hashG))
+const nextHashP = (pt) => {
+	const hashPt = hash(pt.affine())
+	return (new ECCPoint(hashPt, ECCPoint.findNextY(hashPt))).affine()
+}
+ECCPoint.h = nextHashP(ECCPoint.g)
+ECCPoint.hashSet = [nextHashP(ECCPoint.h)]
+for (let i = 1; i < 128; i++) {
+	ECCPoint.hashSet.push(nextHashP(ECCPoint.hashSet[i - 1]))
+}
 ECCPoint.zero = new ECCPoint(1, 1, 0);
 
 module.exports = ECCPoint

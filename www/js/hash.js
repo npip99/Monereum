@@ -37,8 +37,8 @@ const hash = function() {
       parsedArgs.push(heap.length / 2);
       heap += hex;
     } else if (arg.length) {
-      if (arg[0] === "static") {
-        parsedArgs.push(arg.slice(1).map(padItem).join(""))
+      if (arg.static) {
+        parsedArgs.push(arg.map(padItem).join(""))
       } else {
         let hex = padInt(arg.length) + arg.map(padItem).join("")
         parsedArgs.push(heap.length / 2);

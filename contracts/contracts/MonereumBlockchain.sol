@@ -491,7 +491,7 @@ contract MonereumBlockchain is MonereumMemory {
 
         v.outputHash = uint256(keccak256(
             // encodePacked loses length information so we must use .encode everywhere
-            // Else outputsDests[-1] could be shifted into outputSrcs[0] with same hash
+            // otherwise outputsDests[-1] could be shifted into outputSrcs[0] with same hash
             abi.encode(outputDests, outputSrcs, outputCommitments, commitmentAmounts, minerFee)
         ));
 

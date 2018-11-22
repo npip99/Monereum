@@ -18,6 +18,11 @@ tx:
 */
 
 class Wallet {
+  getRandom() {
+    this.seed = hash(this.seed)
+    return this.seed
+  }
+
   generatePrivateKey() {
     const spend = this.privSeed.mod(pt.q)
     this.privSeed = hash(this.privSeed)
@@ -76,7 +81,7 @@ class Wallet {
 
   decryptTransaction(tx, key) {
     if (tx.receiverData) {
-      return tx.receiverData;
+      return tx;
     }
     const pubKey = key.pubKey;
     const secret = hash(tx.src.times(key.viewKey).affine());
@@ -96,7 +101,7 @@ class Wallet {
         secret,
         privKey,
       };
-      return tx.receiverData;
+      return tx;
     } else {
       return null;
     }
@@ -119,8 +124,73 @@ class Wallet {
     return null;
   }
 
-  createRing(tx) {
+  createRingProof(tx, mixers) {
+    const getRandom = this.getRandom.bind(this)
+    const index = getRandom().mod(mixers.length + 1).toJSNumber()
+    mixers.splice(index, 0, tx)
+    const ringFunds = mixers
+    console.log("ringFunds", ringFunds)
+    const keyImage = tx.dest.hashInP().times(tx.receiverData.privKey)
+    const commitment = pt.h.times(tx.receiverData.amount)
+    const outputHash = hash(pt.g)
+    const a = getRandom().mod(pt.q)
+    const b = getRandom().mod(pt.q)
+    let fundCheck = pt.g.times(a).affine()
+    let imageCheck = tx.dest.hashInP().times(a).affine()
+    let commitmentCheck = pt.g.times(b).affine()
+    let prevHash = hash(fundCheck, imageCheck, commitmentCheck, outputHash)
+    const imageFundProofs = Array(ringFunds.length)
+    const commitmentProofs = Array(ringFunds.length)
+    let borromean = prevHash
+    for (let i = 1; i < ringFunds.length; i++) {
+      const j = (i + index) % ringFunds.length;
+      const fundDest = ringFunds[j].dest
+      imageFundProofs[j] = getRandom().mod(pt.q)
+      commitmentProofs[j] = getRandom().mod(pt.q)
 
+      fundCheck = fundDest.times(prevHash).plus(pt.g.times(imageFundProofs[j])).affine()
+      imageCheck = keyImage.times(prevHash).plus(fundDest.hashInP().times(imageFundProofs[j])).affine()
+      commitmentCheck = pt.g.times(commitmentProofs[j]).affine()
+
+      prevHash = hash(fundCheck, imageCheck, commitmentCheck, outputHash)
+      if (j === ringFunds.length - 1) {
+        borromean = prevHash
+      }
+    }
+    imageFundProofs[index] = a.minus(prevHash.times(tx.receiverData.privKey)).mod(pt.q).plus(pt.q).mod(pt.q)
+    commitmentProofs[index] = b
+    return {
+      funds: ringFunds,
+      keyImage,
+      commitment,
+      borromean,
+      imageFundProofs,
+      commitmentProofs,
+      outputHash
+    }
+  }
+
+  static formatItem(item) {
+    if (item.length) {
+      return "[" + item.map(Wallet.formatItem).join(",") + "]"
+    } else if (item.x) {
+      return '[' + item.x.toString() + "," + item.y.toString() + ']'
+    } else {
+      return '"' + item.toString() + '"'
+    }
+  }
+
+  static formatRingProof(ringProof) {
+    return [
+      ringProof.funds.map(a => a.dest),
+      ringProof.funds.map(a => a.commitment),
+      ringProof.keyImage,
+      ringProof.commitment,
+      ringProof.borromean,
+      ringProof.imageFundProofs,
+      ringProof.commitmentProofs,
+      ringProof.outputHash
+    ].map(Wallet.formatItem).join(",")
   }
 
   constructor(mnemonic) {
