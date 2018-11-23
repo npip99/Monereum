@@ -177,7 +177,7 @@ class Wallet {
     }
   }
 
-  static verifyRingProof(ringProof) {
+  verifyRingProof(ringProof) {
     let prevHash = ringProof.borromean
     for (let i = 0; i < ringProof.funds.length; i++) {
       const fundDest = ringProof.funds[i].dest
@@ -197,18 +197,98 @@ class Wallet {
     return ringProof.borromean.eq(prevHash)
   }
 
-  static createRangeProof(tx) {
+  createRangeProof(tx) {
     if (tx.commitment.neq(pt.g.times(tx.senderData.blindingKey).plus(pt.h.times(tx.senderData.amount)))) {
       throw "Transaction commitment discrepancy"
     }
-    const blindingKey = tx.senderData.blindingKey
-    const amount = tx.senderData.amount
     const rangeCommitments = []
     const rangeBorromeans = []
     const rangeProofs = []
     const indices = []
-    console.log(tx.senderData.amount.toArray(2))
-    return true
+    const bin = tx.senderData.amount.toArray(2).value.reverse()
+    let blindingKeySum = bigInt[0]
+		for (let i = 0; i < bin.length; i++) {
+			let blindingKey;
+      if (i === bin.length - 1) {
+        blindingKey = tx.senderData.blindingKey.minus(blindingKeySum).mod(pt.q).plus(pt.q).mod(pt.q)
+      } else {
+        blindingKey = this.getRandom().mod(pt.q)
+        blindingKeySum = blindingKeySum.plus(blindingKey)
+      }
+			const amount = (bin[i] === 1) ? (1 << i) : 0;
+			const commitment = pt.g.times(blindingKey).plus(pt.h.times(amount)).affine()
+			const proof = []
+			let borromean;
+			if (amount === 0) {
+				const a = this.getRandom().mod(pt.q)
+				proof.push(0)
+				let prevHash = hash(pt.g.times(a).affine())
+				proof.push(this.getRandom().mod(pt.q))
+				const check = commitment.minus(pt.h.times(1 << i)).times(prevHash).plus(pt.g.times(proof[1])).affine()
+				prevHash = hash(check)
+        console.log("NZ: ", i, check.toString(), prevHash.toString())
+				borromean = prevHash
+				// Solving prevHash*blindingKey*G + proof*G = a*G
+				proof[0] = a.minus(prevHash.times(blindingKey)).mod(pt.q).plus(pt.q).mod(pt.q)
+			} else {
+				const a = this.getRandom().mod(pt.q)
+				proof.push(0)
+				let prevHash = hash(pt.g.times(a).affine())
+        console.log("NZ: ", i, pt.g.times(a).affine().toString(), prevHash.toString())
+				borromean = prevHash
+				proof.splice(0, 0, this.getRandom().mod(pt.q))
+				const check = commitment.times(prevHash).plus(pt.g.times(proof[0])).affine()
+				prevHash = hash(check)
+				// Solving prevHash*(blindingKey*G+amount*H - amount*H) + proof*G = a*G
+				proof[1] = a.minus(prevHash.times(blindingKey)).mod(pt.q).plus(pt.q).mod(pt.q)
+			}
+			rangeCommitments.push(commitment)
+			rangeBorromeans.push(borromean)
+			rangeProofs.push(proof)
+			indices.push(i)
+		}
+    return {
+				commitment: tx.commitment,
+				rangeCommitments,
+				rangeBorromeans,
+				rangeProofs,
+				indices
+		}
+  }
+  
+  verifyRangeProof(rangeProof) {
+    const {commitment, rangeCommitments, rangeBorromeans, rangeProofs, indices} = rangeProof;
+    let sum = pt.zero
+    for (let i = 0; i < rangeCommitments.length; i++) {
+      const borromean = rangeBorromeans[i]
+      let check = rangeCommitments[i].times(borromean).plus(pt.g.times(rangeProofs[i][0])).affine()
+      let prevHash = hash(check)
+      let index = indices[i]
+      if (index >= 64) {
+        return false
+      }
+      if (i > 0 && indices[i - 1] >= index) {
+        return false
+      }
+      check = rangeCommitments[i].minus(pt.h.times(1 << index)).times(prevHash).plus(pt.g.times(rangeProofs[i][1])).affine()
+      prevHash = hash(check)
+      console.log("NZ: ", check.toString(), prevHash.toString())
+      if (prevHash.neq(borromean)) {
+        return false
+      }
+      sum = sum.plus(rangeCommitments[i])
+    }
+    return sum.eq(commitment)
+  }
+  
+  formatRangeProof(rangeProof) {
+    return [
+      rangeProof.commitment,
+      rangeProof.rangeCommitments,
+      rangeProof.rangeBorromeans,
+      rangeProof.rangeProofs,
+      rangeProof.indices
+    ].map(Wallet.formatItem).join(",")
   }
 
   static formatItem(item) {
@@ -221,7 +301,7 @@ class Wallet {
     }
   }
 
-  static formatRingProof(ringProof) {
+  formatRingProof(ringProof) {
     return [
       ringProof.funds.map(a => a.dest),
       ringProof.funds.map(a => a.commitment),

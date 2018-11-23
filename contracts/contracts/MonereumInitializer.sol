@@ -1,4 +1,4 @@
-pragma solidity 0.4.24;
+pragma solidity 0.4.25;
 
 contract MonereumInitializer {
     // Generates a valid point from some hash `h`, where discrete log is not known w.r.t any other base

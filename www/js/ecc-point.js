@@ -165,7 +165,7 @@ class ECCPoint {
 		}
 
     times(s) {
-    		s = bigInt(s).mod(ECCPoint.q)
+    		s = bigInt(s).mod(ECCPoint.q).plus(ECCPoint.q).mod(ECCPoint.q)
         let bin = s.toArray(4).value
         let ans = ECCPoint.zero
         let pow = this
