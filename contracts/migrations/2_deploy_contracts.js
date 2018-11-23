@@ -2,10 +2,6 @@ var Initializer = artifacts.require("./MonereumInitializer.sol");
 var Verifier = artifacts.require("./MonereumVerifier.sol");
 var Blockchain = artifacts.require("./MonereumBlockchain.sol");
 
-var ConvertLib = artifacts.require("./ConvertLib.sol");
-var MetaCoin = artifacts.require("./MetaCoin.sol");
-
-
 module.exports = function(deployer) {
   deployer.deploy(Initializer).then(function(){
     return deployer.deploy(Verifier, Initializer.address).then(function(){
@@ -48,11 +44,6 @@ module.exports = function(deployer) {
   await blk.initializeH.call();
 
   const h = await blk.H.call();*/
-
-
-  deployer.deploy(ConvertLib);
-  deployer.link(ConvertLib, MetaCoin);
-  deployer.deploy(MetaCoin);
 
   //console.log(h, blk.address);
 };

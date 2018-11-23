@@ -1,4 +1,5 @@
 *node_modules
 *npm-debug.log
+contracts/eth.log
 www/js/static
 www/js/watch.log

@@ -6,5 +6,10 @@ module.exports = {
       network_id: "*", // Match any network id
       gas: 30000000
     }
-  }
+  },
+	compilers: {
+		solc: {
+			version: "0.4.25"
+		}
+	}
 };

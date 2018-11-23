@@ -1,8 +1,8 @@
 var Blockchain = artifacts.require("./MonereumBlockchain.sol");
-var bigint = require("big-integer");
-let value = bigint(2).pow(256);
+//var bigint = require("big-integer");
+//let value = bigint(2).pow(256);
 
-var MetaCoin = artifacts.require("./MetaCoin.sol");
+//var MetaCoin = artifacts.require("./MetaCoin.sol");
 
 
 contract('Monereum', function(accounts) {
