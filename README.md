@@ -22,7 +22,7 @@ sudo apt install npm
 ```
 Then, install the following CLI tools:
 ```
-sudo npm i -g truffle ganache-cli browserify watchify uglify-js babelify babel-preset-es2015
+sudo npm i -g truffle ganache-cli
 ```
 
 ## How Monereum Works
