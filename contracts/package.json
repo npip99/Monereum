@@ -1,5 +1,10 @@
 {
+  "scripts": {
+    "truffle": "truffle"
+  },
   "dependencies": {
-    "big-integer": "latest"
+  },
+  "devDependencies": {
+    "truffle": "^4.1.14"
   }
 }

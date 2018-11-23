@@ -53,6 +53,7 @@ class Wallet {
   }
 
   createTransaction(pubKey, amount) {
+		amount = bigInt(amount)
     const tx = {}
     const rand = this.sentSeed.mod(pt.q);
     this.sentSeed = hash(this.sentSeed);
@@ -206,7 +207,7 @@ class Wallet {
     const rangeBorromeans = []
     const rangeProofs = []
     const indices = []
-    tx.senderData.amount.toArray()
+    console.log(tx.senderData.amount.toArray(2))
     return true
   }
 
