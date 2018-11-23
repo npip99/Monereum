@@ -5,15 +5,18 @@ const bigInt = require('./bigint');
 
 const padInt = i => {
   if (i.bitLength && i.bitLength() > 256) {
-    console.error(i, " has bit length more than 256");
+    throw (i + " has bit length more than 256");
   }
   if (i < 0) {
-    console.error(i, " is a negative number");
+    throw (i + " is a negative number");
   }
   return leftPad(i.toString(16), 64, 0);
 };
 const padItem = i => {
   if (i.x) {
+    if (i.z.neq(1) && i.z.neq(0)) {
+      throw (i + " is not in affine coordinates")
+    }
     return padInt(i.x) + padInt(i.y);
   } else {
     return padInt(i)

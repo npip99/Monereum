@@ -25,13 +25,13 @@ class ECCPoint {
 			x = bigInt(x)
 			let p = ECCPoint.p
 			while (true) {
-    		const goal = x.times(x).mod(p).times(x).plus(3).mod(p)
+    		const goal = x.square().times(x).plus(3).mod(p)
     		const y = goal.modPow(p.plus(1).over(4), p)
-				if (y.times(y).mod(p).neq(goal)) {
+				if (y.square().mod(p).neq(goal)) {
 						x = x.plus(1)
 						continue;
 				}
-				return y
+				return new ECCPoint(x, y)
 			}
 		}
 
@@ -78,7 +78,7 @@ class ECCPoint {
     }
 
     isInP() {
-    		return this.x.lt(ECCPoint.p) && this.y.lt(ECCPoint.p);
+    		return this.x.lt(ECCPoint.p) && this.y.lt(ECCPoint.p) && this.z.eq(1) && this.isOnCurve();
     }
 
     isOnCurve() {
@@ -207,8 +207,8 @@ class ECCPoint {
 		toJSON() {
 			const aff = this.affine()
 			return {
-				x:aff.x.toString(),
-				y:aff.y.toString()
+				x: aff.x.toString(),
+				y: aff.y.toString()
 			}
 		}
 }
@@ -218,7 +218,7 @@ ECCPoint.q = bigInt("21888242871839275222246405745257275088548364400416034343698
 ECCPoint.g = new ECCPoint(1, 2);
 const nextHashP = (pt) => {
 	const hashPt = hash(pt.affine())
-	return (new ECCPoint(hashPt, ECCPoint.findNextY(hashPt))).affine()
+	return ECCPoint.findNextY(hashPt).affine()
 }
 ECCPoint.h = nextHashP(ECCPoint.g)
 ECCPoint.hashSet = [nextHashP(ECCPoint.h)]

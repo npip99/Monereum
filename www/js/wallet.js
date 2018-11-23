@@ -50,14 +50,15 @@ class Wallet {
     this.sentSeed = hash(this.sentSeed);
     tx.src = pt.g.times(rand).affine()
     const secret = hash(pubKey.viewPub.times(rand).affine())
-    tx.senderData = {
-      privKey: rand,
-      secret: secret,
-      recipient: pubKey,
-      amount: amount,
-    }
     tx.dest = pt.g.times(secret).plus(pubKey.spendPub).affine()
     const blindingKey = hash(secret)
+    tx.senderData = {
+      privKey: rand,
+      recipient: pubKey,
+      secret,
+      blindingKey,
+      amount,
+    }
     tx.commitment = pt.g.times(blindingKey).plus(pt.h.times(amount)).affine()
     tx.commitmentAmount = hash(blindingKey).plus(amount).mod(pt.q)
     return tx
@@ -99,6 +100,7 @@ class Wallet {
       tx.receiverData = {
         amount,
         secret,
+        blindingKey,
         privKey,
       };
       return tx;
@@ -124,19 +126,21 @@ class Wallet {
     return null;
   }
 
-  createRingProof(tx, mixers) {
+  createRingProof(from, mixers, to) {
+    if (from.receiverData.amount.neq(to.senderData.amount)) {
+      throw "from and to amounts don't line up"
+    }
     const getRandom = this.getRandom.bind(this)
     const index = getRandom().mod(mixers.length + 1).toJSNumber()
-    mixers.splice(index, 0, tx)
+    mixers.splice(index, 0, from)
     const ringFunds = mixers
-    console.log("ringFunds", ringFunds)
-    const keyImage = tx.dest.hashInP().times(tx.receiverData.privKey)
-    const commitment = pt.h.times(tx.receiverData.amount)
+    const keyImage = from.dest.hashInP().times(from.receiverData.privKey).affine()
+    const commitment = pt.g.times(to.senderData.blindingKey).plus(pt.h.times(to.senderData.amount)).affine()
     const outputHash = hash(pt.g)
     const a = getRandom().mod(pt.q)
     const b = getRandom().mod(pt.q)
     let fundCheck = pt.g.times(a).affine()
-    let imageCheck = tx.dest.hashInP().times(a).affine()
+    let imageCheck = from.dest.hashInP().times(a).affine()
     let commitmentCheck = pt.g.times(b).affine()
     let prevHash = hash(fundCheck, imageCheck, commitmentCheck, outputHash)
     const imageFundProofs = Array(ringFunds.length)
@@ -145,20 +149,22 @@ class Wallet {
     for (let i = 1; i < ringFunds.length; i++) {
       const j = (i + index) % ringFunds.length;
       const fundDest = ringFunds[j].dest
+      const fundCommitment = ringFunds[j].commitment
+      const commitmentChallenge = commitment.minus(fundCommitment)
       imageFundProofs[j] = getRandom().mod(pt.q)
       commitmentProofs[j] = getRandom().mod(pt.q)
 
       fundCheck = fundDest.times(prevHash).plus(pt.g.times(imageFundProofs[j])).affine()
       imageCheck = keyImage.times(prevHash).plus(fundDest.hashInP().times(imageFundProofs[j])).affine()
-      commitmentCheck = pt.g.times(commitmentProofs[j]).affine()
+      commitmentCheck = commitmentChallenge.times(prevHash).plus(pt.g.times(commitmentProofs[j])).affine()
 
       prevHash = hash(fundCheck, imageCheck, commitmentCheck, outputHash)
       if (j === ringFunds.length - 1) {
         borromean = prevHash
       }
     }
-    imageFundProofs[index] = a.minus(prevHash.times(tx.receiverData.privKey)).mod(pt.q).plus(pt.q).mod(pt.q)
-    commitmentProofs[index] = b
+    imageFundProofs[index] = a.minus(prevHash.times(from.receiverData.privKey)).mod(pt.q).plus(pt.q).mod(pt.q)
+    commitmentProofs[index] = b.minus(prevHash.times(to.senderData.blindingKey.minus(from.receiverData.blindingKey))).mod(pt.q).plus(pt.q).mod(pt.q)
     return {
       funds: ringFunds,
       keyImage,
@@ -168,6 +174,26 @@ class Wallet {
       commitmentProofs,
       outputHash
     }
+  }
+
+  static verifyRingProof(ringProof) {
+    let prevHash = ringProof.borromean
+    for (let i = 0; i < ringProof.funds.length; i++) {
+      const fundDest = ringProof.funds[i].dest
+      const fundCommitment = ringProof.funds[i].commitment
+
+      const imageFundProof = ringProof.imageFundProofs[i]
+      const commitmentProof = ringProof.commitmentProofs[i]
+
+      const commitmentChallenge = ringProof.commitment.minus(fundCommitment)
+
+      const fundCheck = fundDest.times(prevHash).plus(pt.g.times(imageFundProof)).affine()
+      const imageCheck = ringProof.keyImage.times(prevHash).plus(fundDest.hashInP().times(imageFundProof)).affine()
+      const commitmentCheck = commitmentChallenge.times(prevHash).plus(pt.g.times(commitmentProof)).affine()
+
+      prevHash = hash(fundCheck, imageCheck, commitmentCheck, ringProof.outputHash)
+    }
+    return ringProof.borromean.eq(prevHash)
   }
 
   static formatItem(item) {
