@@ -186,4 +186,50 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
         }
         return true;
     }
+
+    // If Alice sends two transactions to Bob with public keys P1 and P2, then Alice will know
+    // logG(P1 - P2) = s, since Alice generated P_i = x_iG + B to send to Bob over DH exchange.
+    // If Alice knows Bob's keyImages will use the same base H, Alice could then correlate
+    // Bob's public keyImages I1 and I2 by checking that I1 - I2 = sH, and know that both were from Bob.
+    // Here we make it incomputable for Alice to generate two public keys with the same base.
+    function hashInP(uint256[2] p1) public constant returns (uint256[2] ret) {
+        require(hashSetInitialized);
+        uint256 pHash = hashP(p1);
+        uint256[2] memory hashGenerator = [uint256(0), uint256(0)];
+        for (uint256 i = 0; i < 128; i++) {
+            if (((pHash >> i) & 1) == 1) {
+                hashGenerator = ecadd(hashGenerator, hashSet[i]);
+            }
+        }
+        ret = hashGenerator;
+    }
+
+    mapping(uint256 => uint256[2]) hashSet;
+    bool hashSetInitialized = false;
+
+    function getHashval(uint256 i) public constant returns (uint256[2] ret) {
+        ret = hashSet[i];
+    }
+
+    function initializeHashVals(uint256 a, uint256 b) public {
+        for (uint256 i = a; i < b; i++) {
+            initializeHashVal(i);
+        }
+    }
+
+    function initializeHashVal(uint256 i) public {
+        require(hashSet[i][0] == 0);
+        require(0 <= i && i < 128);
+        uint256[2] memory prevVal;
+        if (i == 0) {
+            prevVal = h;
+        } else {
+            prevVal = hashSet[i - 1];
+        }
+        require(prevVal[0] != 0);
+        hashSet[i] = mi.generateNextPoint(hashP(prevVal), p);
+        if (i == 128) {
+            hashSetInitialized = true;
+        }
+    }
 }

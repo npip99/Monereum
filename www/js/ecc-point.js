@@ -49,7 +49,7 @@ class ECCPoint {
 			if (this.hashedInP) {
 				return this.hashedInP
 			}
-			const pHash = hash(this).toArray(2).value
+			const pHash = hash(this).toArray(2).value.reverse()
 			let hashGenerator = ECCPoint.zero
 			for (let i = 0; i < 128; i++) {
 				if (pHash[i] === 1) {

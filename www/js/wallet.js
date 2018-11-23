@@ -23,6 +23,14 @@ class Wallet {
     return this.seed
   }
 
+  addSentTransaction(tx) {
+    sent.push(tx)
+  }
+
+  addReceivedTransaction(tx) {
+    funds.push(tx);
+  }
+
   generatePrivateKey() {
     const spend = this.privSeed.mod(pt.q)
     this.privSeed = hash(this.privSeed)
@@ -70,14 +78,6 @@ class Wallet {
 
   wasCreatedBy(tx, rand) {
     return tx.src.eq(pt.g.times(rand))
-  }
-
-  addSentTransaction(tx) {
-    sent.push(tx)
-  }
-
-  addReceivedTransaction(tx) {
-    funds.push(tx);
   }
 
   decryptTransaction(tx, key) {
@@ -196,11 +196,25 @@ class Wallet {
     return ringProof.borromean.eq(prevHash)
   }
 
+  static createRangeProof(tx) {
+    if (tx.commitment.neq(pt.g.times(tx.senderData.blindingKey).plus(pt.h.times(tx.senderData.amount)))) {
+      throw "Transaction commitment discrepancy"
+    }
+    const blindingKey = tx.senderData.blindingKey
+    const amount = tx.senderData.amount
+    const rangeCommitments = []
+    const rangeBorromeans = []
+    const rangeProofs = []
+    const indices = []
+    tx.senderData.amount.toArray()
+    return true
+  }
+
   static formatItem(item) {
     if (item.length) {
       return "[" + item.map(Wallet.formatItem).join(",") + "]"
     } else if (item.x) {
-      return '[' + item.x.toString() + "," + item.y.toString() + ']'
+      return '["' + item.x.toString() + '","' + item.y.toString() + '"]'
     } else {
       return '"' + item.toString() + '"'
     }
