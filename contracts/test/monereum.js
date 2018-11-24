@@ -1,4 +1,5 @@
-var Blockchain = artifacts.require("./MonereumBlockchain.sol");
+//var Blockchain = artifacts.require("./MonereumBlockchain.sol");
+var Verifier = artifacts.require("./MonereumVerifier.sol");
 //var bigint = require("big-integer");
 //let value = bigint(2).pow(256);
 
@@ -7,13 +8,17 @@ var Blockchain = artifacts.require("./MonereumBlockchain.sol");
 
 contract('Monereum', function(accounts) {
   it("should put 10000 MetaCoin in the first account", function() {
-    return Blockchain.deployed().then(function(instance) {
-      console.log(instance);
-      return instance.G.call();
-    }).then(function(balance) {
-      console.log(balance.valueOf());
-      assert.equal(1, 1, "Nope");
-      //assert.equal(balance.valueOf(), 10000, "10000 wasn't in the first account");
+    return Verifier.deployed().then(function(instance) {
+      console.log("H")
+      return instance.initializeH().then(function() {
+        console.log("HERE")
+				return instance.initializeHashVals(0, 35).then(function() {
+					return instance.getHashVal(127).then(function(val) {
+					  console.log("VAL: ", val)
+            return instance
+					})
+				})
+      });
     });
   });
 /*  it("should call a function that depends on a linked library", function() {

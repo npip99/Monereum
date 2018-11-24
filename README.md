@@ -20,10 +20,7 @@ In order to develop on this repository, please install `npm`:
 ```
 sudo apt install npm
 ```
-Then, install the following CLI tools:
-```
-sudo npm i -g truffle ganache-cli
-```
+You'll also have to execute `npm i` in the `./contracts` and `./www/js` directories. You can see the available scripts by executing `npm run`.
 
 ## How Monereum Works
 

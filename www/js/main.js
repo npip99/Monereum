@@ -3,16 +3,18 @@ const bigInt = require('./bigint');
 const hash = require('./hash')
 const pt = require('./ecc-point')
 
+const contract = "0xa7913FC3E4Dbf3d8cACa06e1c2da85ED838e150f"
+const testAmount = 100000
 const w1 = new wallet("hey");
 const w2 = new wallet("yo");
 const key1 = w2.generatePrivateKey()
 const key2 = w2.generatePrivateKey()
 const key3 = w2.generatePrivateKey()
 const outKey1 = w2.generatePrivateKey()
-const tx1 = w1.createTransaction(key1.pubKey, 30)
+const tx1 = w1.createTransaction(key1.pubKey, testAmount)
 const tx2 = w1.createTransaction(key2.pubKey, 4)
 const tx3 = w1.createTransaction(key3.pubKey, 5)
-const out1 = w2.createTransaction(outKey1.pubKey, 30)
+const out1 = w2.createTransaction(outKey1.pubKey, testAmount)
 const dec1 = w2.decryptTransaction(tx1, key1)
 const ringProof = w2.createRingProof(dec1, [tx2, tx3], out1)
 //console.log(pt.hashSet.map(a => a.toString()).join(","))
@@ -22,6 +24,8 @@ const ringProof = w2.createRingProof(dec1, [tx2, tx3], out1)
 //console.log(pt.h.isOnCurve())
 //console.log(hash(pt.h).toString(), pt.p.toString())
 //console.log(pt.hashSet[100].toString())
+console.log("hashSet", pt.hashSet[127].toString())
+console.log("hashG", pt.g.hashInP().toString())
 console.log("qG", pt.g.times(pt.q.plus(1)))
 console.log("RingProof: ", ringProof)
 console.log("Verification: ", w2.verifyRingProof(ringProof))

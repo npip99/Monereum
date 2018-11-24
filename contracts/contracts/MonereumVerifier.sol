@@ -6,6 +6,8 @@ import "./MonereumConstants.sol";
 contract MonereumVerifier is MonereumMath, MonereumConstants {
     constructor(address MI) MonereumMath(MI) public {
     }
+    
+    event Log(string r);
 
     event BadRangeProofReason(
       string r
@@ -21,19 +23,32 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
         uint256[] rangeBorromeans,
         uint256[2][] rangeProofs,
         uint256[] indices
-    ) public constant returns (bool) {
+    ) public returns (bool) {
+        emit Log("Verifying RangeProof");
         RangeVariables memory v;
         uint256[2] memory sum = [uint256(0), uint256(0)];
         for (uint256 i = 0; i < indices.length; i++) {
             v.borromean = rangeBorromeans[i];
+            if (!isInQ(v.borromean)) {
+                emit BadRangeProofReason("Borromean was not in Q");
+                return false;
+            }
+            if (!isInf(rangeCommitments[i]) && !eccvalid(rangeCommitments[i])) {
+                emit BadRangeProofReason("rangeCommitments were not all on curve");
+                return false;
+            }
+            if (!isInQ(rangeProofs[i][0])) {
+                emit BadRangeProofReason("rangeProof was not in Q");
+                return false;
+            }
+            if (!isInQ(rangeProofs[i][1])) {
+                emit BadRangeProofReason("rangeProof was not in Q");
+                return false;
+            }
             uint256[2] memory rangeCheck = ecadd(
                 ecmul(rangeCommitments[i], v.borromean),
                 ecmul(g, rangeProofs[i][0])
             );
-            if (rangeCheck[0] == p) {
-                emit BadRangeProofReason("rangeCheck inputs were not all on curve");
-                return false;
-            }
             uint256 prevHash = hashP(rangeCheck);
             uint256 index = indices[i];
             if (index >= 64) {
@@ -49,19 +64,11 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
                 ecmul(ecadd(rangeCommitments[i], [H2i[0], p - H2i[1]]), prevHash),
                 ecmul(g, rangeProofs[i][1])
             );
-            if (rangeCheck[0] == p) {
-                emit BadRangeProofReason("rangeCheck inputs were not all on curve");
-                return false;
-            }
             if (hashP(rangeCheck) != v.borromean) {
                 emit BadRangeProofReason("Borromean did not match");
                 return false;
             }
             sum = ecadd(sum, rangeCommitments[i]);
-        }
-        if (sum[0] == p) {
-            emit BadRangeProofReason("Commitment is not on curve");
-            return false;
         }
         if (sum[0] != commitment[0]) {
             emit BadRangeProofReason("Sum of range commitments is not zero");
@@ -71,6 +78,7 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
             emit BadRangeProofReason("Sum of range commitments is not zero");
             return false;
         }
+        emit Log("Range Proof Successful");
         return true;
     }
 
@@ -97,12 +105,18 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
         uint256[MIXIN] imageFundProofs,
         uint256[MIXIN] commitmentProofs,
         uint256 outputHash
-    ) public constant returns (bool) {
+    ) public returns (bool) {
+        emit Log("Verifying RingProof");
+        require(hashSetInitialized);
         RingVariables memory v;
         uint256 prevHash = borromean;
-        if (isInf(keyImage)) {
+        if (!eccvalid(keyImage)) {
             // keyImage = d * Hash(dest_i) must be solveable
-            emit BadRingProofReason("Key Image cannot be the point at infinity");
+            emit BadRingProofReason("Key Image is not on curve");
+            return false;
+        }
+        if (!isInf(commitment) && !eccvalid(commitment)) {
+            emit BadRingProofReason("Ring Commitment is not on curve");
             return false;
         }
         for( uint256 i = 0; i < MIXIN; i++ ) {
@@ -113,15 +127,15 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
             uint256 imageFundProof = imageFundProofs[i];
             uint256 commitmentProof = commitmentProofs[i];
             // commitmentChallenge_i = commitment - fundCommitment_i
-            if (isInf(commitment)) {
-                emit BadRingProofReason("Ring Commitment is point at infinity");
+            if (!isInQ(imageFundProof)) {
+                emit BadRingProofReason("imageFundProof is not in Q");
+                return false;
+            }
+            if (!isInQ(commitmentProof)) {
+                emit BadRingProofReason("commitmentProof is not in Q");
                 return false;
             }
             v.commitmentChallenge = ecadd(commitment, [v.fundCommitment[0], p - v.fundCommitment[1]]);
-            if (v.commitmentChallenge[1] == 0) {
-                emit BadRingProofReason("Commitment Challenge had a bad input");
-                return false;
-            }
 
             // (All indices are mod MIXIN)
             // (All points mentioned are under the group generated by k*g mod p for all positive k in Z/pZ)
@@ -143,10 +157,6 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
             // => a = prevHash * logG(dest_i) + imageFundProof
             // => imageFundProof = a - prevHash * logG(dest_i)
             v.fundCheck = ecadd(ecmul(v.fundDest, prevHash), ecmul(g, imageFundProof));
-            if (v.fundCheck[0] == p) {
-                emit BadRingProofReason("fundCheck calculations failed");
-                return false;
-            }
 
             // We calculate imageCheck = prevHash * keyImage + (a - prevHash * logG(dest_i)) * Hash(dest_i)
             // => b * Hash(dest_i) = prevHash * d * Hash(dest_i) + (a - prevHash * logG(dest_i)) * Hash(dest_i)
@@ -158,10 +168,6 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
             // We take care to remember that all exponent calculations are mod q, to deduce that the
             // keyImage is unique for each dest_i by q being prime. (As prevHash * d1 = prevHash * d2 => d1 = d2 mod q)
             v.imageCheck = ecadd(ecmul(keyImage, prevHash), ecmul(hashInP(v.fundDest), imageFundProof));
-            if (v.imageCheck[0] == p) {
-                emit BadRingProofReason("imageCheck calculations failed");
-                return false;
-            }
 
             // commitmentCheck = prevHash * commitmentChallenge + commitmentProof * G
             // => commitmentCheck = prevHash * (commitment - fundCommitment_i) + commitmentProof * G
@@ -170,10 +176,6 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
             // For a desired constant c and uncontrollable prevHash, we can only calculate commitmentProof when
             // logG(commitment - fundCommitment_i) is known. Thus, they must have the same commitment a * H.
             v.commitmentCheck = ecadd(ecmul(v.commitmentChallenge, prevHash), ecmul(g, commitmentProof));
-            if (v.commitmentCheck[0] == p) {
-                emit BadRingProofReason("commitmentCheck calculations failed");
-                return false;
-            }
 
             // Includes outputHash confirms that the signer approves of that data
             prevHash = uint256(keccak256(
@@ -184,6 +186,7 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
             emit BadRingProofReason("Borromean was incorrect");
             return false;
         }
+        emit Log("Ring Proof Successful");
         return true;
     }
 
@@ -193,7 +196,6 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
     // Bob's public keyImages I1 and I2 by checking that I1 - I2 = sH, and know that both were from Bob.
     // Here we make it incomputable for Alice to generate two public keys with the same base.
     function hashInP(uint256[2] p1) public constant returns (uint256[2] ret) {
-        require(hashSetInitialized);
         uint256 pHash = hashP(p1);
         uint256[2] memory hashGenerator = [uint256(0), uint256(0)];
         for (uint256 i = 0; i < 128; i++) {
@@ -228,7 +230,7 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
         }
         require(prevVal[0] != 0);
         hashSet[i] = mi.generateNextPoint(hashP(prevVal), p);
-        if (i == 128) {
+        if (i == 127) {
             hashSetInitialized = true;
         }
     }

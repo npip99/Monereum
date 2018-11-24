@@ -25,12 +25,12 @@ contract MonereumMath {
         h = mi.generateNextPoint(hashP(g), p);
     }
 
-    function G() public constant returns (uint256[2] ret) {
-        ret = g;
+    function G() public constant returns (uint256[2]) {
+        return g;
     }
 
-    function H() public constant returns (uint256[2] ret) {
-        ret = h;
+    function H() public constant returns (uint256[2]) {
+        return h;
     }
 
     // All points other than the point at infinity will have order q
@@ -45,6 +45,21 @@ contract MonereumMath {
     function hashP(uint256[2] p1) public pure returns (uint256) {
         return uint256(keccak256(abi.encode(p1)));
     }
+    
+    // Excludes [0, 0]
+    function eccvalid(uint256[2] p1) public constant returns (bool) {
+        if (p1[0] >= p || p1[1] >= p) {
+            return false;
+        }
+        if (p1[0] == 0 && p1[1] == 0) {
+            return false;
+        }
+        if (mulmod(p1[1], p1[1], p) == addmod(mulmod(p1[0], mulmod(p1[0], p1[0], p), p), 3, p)) {
+            return true;
+        } else {
+            return false;
+        }
+    } 
 
     function ecadd(uint256[2] p1, uint256[2] p2) public constant returns (uint256[2] ret) {
         // With a public key (x, y), this computes p = scalar * (x, y).
@@ -55,7 +70,7 @@ contract MonereumMath {
         input[3] = p2[1];
         bool failed = false;
         assembly {
-            // call ecmul precompile
+            // call ecadd precompile
             if iszero(call(not(0), 0x06, 0, input, 0x80, ret, 0x40)) {
                 failed := 1
             }
