@@ -52,14 +52,14 @@ const hash = function() {
     }
   }
   let sizeOfArg = 0;
-  for (let i of parsedArgs) {
+  for (const i of parsedArgs) {
     if (typeof i === "number") {
       sizeOfArg += 32;
     } else {
       sizeOfArg += i.length / 2;
     }
   }
-  for (let i in parsedArgs) {
+  for (const i in parsedArgs) {
     if (typeof parsedArgs[i] === "number") {
       parsedArgs[i] = padInt(sizeOfArg + parsedArgs[i]);
     }

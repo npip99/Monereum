@@ -465,7 +465,7 @@ contract MonereumBlockchain is MonereumMemory {
         // N Inputs
         uint256[2][MIXIN][] funds,
         // N Ring Proofs
-        uint256[2][] keyImages,
+        uint256[2][] keyImage,
         uint256[2][] commitment,
         uint256[] borromean,
         uint256[MIXIN][] imageFundProofs,
@@ -486,7 +486,7 @@ contract MonereumBlockchain is MonereumMemory {
         Variables memory v;
 
         v.R = funds.length;
-        require(keyImages.length == v.R);
+        require(keyImage.length == v.R);
         require(commitment.length == v.R);
         require(borromean.length == v.R);
         require(imageFundProofs.length == v.R);
@@ -508,7 +508,7 @@ contract MonereumBlockchain is MonereumMemory {
 
         v.commitmentSum = [uint256(0), uint256(0)];
         for (v.ring = 0; v.ring < v.R; v.ring++) {
-            v.keyImage = keyImages[v.ring];
+            v.keyImage = keyImage[v.ring];
             require(!usedImages[hashP(v.keyImage)], "keyImage is already used");
             for ( v.i = 0; v.i < MIXIN; v.i++ ) {
                 v.transactionID = hashP(funds[v.ring][v.i]);

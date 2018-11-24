@@ -85,7 +85,8 @@ class ECCPoint {
 				const p = ECCPoint.p
     		const x = this.x
         const y = this.y
-				const z6 = this.z.square().square().times(this.z.square())
+				const zz = this.zz || (this.zz = this.z.square())
+				const z6 = zz.square().times(zz)
     		return y.square().minus(x.square().times(x).plus(z6.times(3))).mod(p).eq(bigInt[0]);
     }
 
@@ -105,15 +106,15 @@ class ECCPoint {
 					return this
 				}
     		const p = ECCPoint.p
-				const z1z1 = this.zz = this.zz || this.z.square()
-				const z2z2 = pt.zz = pt.zz || pt.z.square()
+				const z1z1 = this.zz || (this.zz = this.z.square())
+				const z2z2 = pt.zz || (pt.zz = pt.z.square())
 				const u1 = this.x.times(z2z2).mod(p)
 				const u2 = pt.x.times(z1z1).mod(p)
 				const s1 = this.y.times(z2z2).times(pt.z).mod(p)
 				const s2 = pt.y.times(z1z1).times(this.z).mod(p)
 				if (u1.eq(u2)) {
 					if (s1.eq(s2)) {
-						return this.square()
+						return this.double()
 					} else {
 						return ECCPoint.zero
 					}
@@ -129,9 +130,9 @@ class ECCPoint {
 				return new ECCPoint(x3, y3, z3);
     }
 
-		square() {
-			if (this.sq) {
-				return this.sq
+		double() {
+			if (this.dub) {
+				return this.dub
 			}
 			if (this.y == 0) {
 				return ECCPoint.zero
@@ -146,15 +147,8 @@ class ECCPoint {
 			const x = m.square().minus(s.shiftLeft(1)).mod(p)
 			const y = m.times(s.minus(x)).minus(y2.square().shiftLeft(3)).mod(p)
 			const z = this.y.plus(this.z).square().minus(y2).minus(z2).mod(p)
-			this.sq = new ECCPoint(x, y, z);
-			return this.sq;
-		}
-
-		double() {
-			if (!this.dub) {
-				this.dub = this.square()
-			}
-			return this.dub
+			this.dub = new ECCPoint(x, y, z);
+			return this.dub;
 		}
 
 		triple() {
@@ -166,15 +160,14 @@ class ECCPoint {
 
     times(s) {
     		s = bigInt(s).mod(ECCPoint.q).plus(ECCPoint.q).mod(ECCPoint.q)
-        let bin = s.toArray(4).value
+        let bin = s.toArray(2).value
         let ans = ECCPoint.zero
         let pow = this
-				let win = [a => ECCPoint.zero, a => a, a => a.double(), a => a.triple()];
         for( let i = bin.length - 1; i >= 0; i-- ) {
-						if (bin[i] != 0) {
-							ans = ans.plus(win[bin[i]](pow))
+						if (bin[i] === 1) {
+							ans = ans.plus(pow)
 						}
-            pow = pow.square().square()
+            pow = pow.double()
         }
         return ans;
     }
@@ -195,7 +188,6 @@ class ECCPoint {
 			this.x = x
 			this.y = y
 			this.z = bigInt[1]
-			this.zz = bigInt[1]
 			return this;
 		}
 

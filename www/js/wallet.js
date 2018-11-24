@@ -18,51 +18,65 @@ tx:
 */
 
 class Wallet {
-  getRandom() {
-    this.seed = hash(this.seed)
-    return this.seed
-  }
-
   addSentTransaction(tx) {
-    sent.push(tx)
+    this.sent.push(tx)
   }
 
   addReceivedTransaction(tx) {
-    funds.push(tx);
+    this.funds.push(tx);
+  }
+  
+  collectAmount(goalAmount) {
+    let amount = 0
+    const funds = []
+    for(const fund of this.funds) {
+      funds.push(fund)
+      amount += fund.receiverData.amount
+      if (amount >= goalAmount) {
+        break
+      }
+    }
+    if (amount < goalAmount) {
+      return null
+    }
+    return {
+      funds,
+      amount
+    }
+  }
+  
+  getRandom() {
+    this.seed = hash(this.seed.xor(this.masterKey))
+    return this.seed
   }
 
-  generatePrivateKey() {
+  generateKey() {
+    this.privSeed = hash(this.privSeed.xor(this.masterKey))
+    
     const spend = this.privSeed.mod(pt.q)
-    this.privSeed = hash(this.privSeed)
-    const view = this.privSeed.mod(pt.q)
-    this.privSeed = hash(this.privSeed)
+    const view = hash(spend).mod(pt.q)
     const key = {
+      spendPub: pt.g.times(spend),
+      viewPub: pt.g.times(view),
       spendKey: spend,
       viewKey: view
     }
-    key.pubKey = this.getPublicKey(key)
     this.keys.push(key)
     return key;
   }
 
-  getPublicKey(privKey) {
-    return {
-      spendPub: pt.g.times(privKey.spendKey),
-      viewPub: pt.g.times(privKey.viewKey)
-    }
-  }
-
   createTransaction(pubKey, amount) {
+    this.sentSeed = hash(this.sentSeed.xor(this.masterKey));
+    
+    const rand = this.sentSeed.mod(pt.q);
 		amount = bigInt(amount)
     const tx = {}
-    const rand = this.sentSeed.mod(pt.q);
-    this.sentSeed = hash(this.sentSeed);
     tx.src = pt.g.times(rand).affine()
     const secret = hash(pubKey.viewPub.times(rand).affine())
     tx.dest = pt.g.times(secret).plus(pubKey.spendPub).affine()
     const blindingKey = hash(secret)
     tx.senderData = {
-      privKey: rand,
+      srcKey: rand,
       recipient: pubKey,
       secret,
       blindingKey,
@@ -85,9 +99,8 @@ class Wallet {
     if (tx.receiverData) {
       return tx;
     }
-    const pubKey = key.pubKey;
     const secret = hash(tx.src.times(key.viewKey).affine());
-    if (tx.dest.eq(pt.g.times(secret).plus(pubKey.spendPub))) {
+    if (tx.dest.eq(pt.g.times(secret).plus(key.spendPub))) {
       let privKey = null;
       if (key.spendKey) {
         privKey = secret.plus(key.spendKey).mod(pt.q)
@@ -95,7 +108,7 @@ class Wallet {
       const blindingKey = hash(secret)
       const amount = tx.commitmentAmount.minus(hash(blindingKey)).mod(pt.q).plus(pt.q).mod(pt.q)
       if (tx.commitment.neq(pt.g.times(blindingKey).plus(pt.h.times(amount)))) {
-        console.error("Bad TX: ", tx, pubKey, key);
+        console.error("Bad TX: ", tx, key);
         return null;
       }
       tx.receiverData = {
@@ -118,8 +131,8 @@ class Wallet {
   }
 
   tryDecryptTransaction(tx) {
-    for (key of this.keys) {
-      const triedTX = decryptTransaction(tx, key)
+    for (const key of this.keys) {
+      const triedTX = this.decryptTransaction(tx, key)
       if (triedTX) {
         return triedTX;
       }
@@ -127,17 +140,13 @@ class Wallet {
     return null;
   }
 
-  createRingProof(from, mixers, to) {
-    if (from.receiverData.amount.neq(to.senderData.amount)) {
-      throw "from and to amounts don't line up"
-    }
+  createRingProof(from, mixers, outputHash, newBlindingKey) {
     const getRandom = this.getRandom.bind(this)
     const index = getRandom().mod(mixers.length + 1).toJSNumber()
     mixers.splice(index, 0, from)
     const ringFunds = mixers
     const keyImage = from.dest.hashInP().times(from.receiverData.privKey).affine()
-    const commitment = pt.g.times(to.senderData.blindingKey).plus(pt.h.times(to.senderData.amount)).affine()
-    const outputHash = hash(pt.g)
+    const commitment = pt.g.times(newBlindingKey).plus(pt.h.times(from.receiverData.amount)).affine()
     const a = getRandom().mod(pt.q)
     const b = getRandom().mod(pt.q)
     let fundCheck = pt.g.times(a).affine()
@@ -165,7 +174,11 @@ class Wallet {
       }
     }
     imageFundProofs[index] = a.minus(prevHash.times(from.receiverData.privKey)).mod(pt.q).plus(pt.q).mod(pt.q)
-    commitmentProofs[index] = b.minus(prevHash.times(to.senderData.blindingKey.minus(from.receiverData.blindingKey))).mod(pt.q).plus(pt.q).mod(pt.q)
+    commitmentProofs[index] = b.minus(prevHash.times(newBlindingKey.minus(from.receiverData.blindingKey))).mod(pt.q).plus(pt.q).mod(pt.q)
+    // Hash as static length array
+    ringFunds.static = true
+    imageFundProofs.static = true
+    commitmentProofs.static = true
     return {
       funds: ringFunds,
       keyImage,
@@ -226,7 +239,6 @@ class Wallet {
 				proof.push(this.getRandom().mod(pt.q))
 				const check = commitment.minus(pt.h.times(1 << i)).times(prevHash).plus(pt.g.times(proof[1])).affine()
 				prevHash = hash(check)
-        console.log("NZ: ", i, check.toString(), prevHash.toString())
 				borromean = prevHash
 				// Solving prevHash*blindingKey*G + proof*G = a*G
 				proof[0] = a.minus(prevHash.times(blindingKey)).mod(pt.q).plus(pt.q).mod(pt.q)
@@ -234,7 +246,6 @@ class Wallet {
 				const a = this.getRandom().mod(pt.q)
 				proof.push(0)
 				let prevHash = hash(pt.g.times(a).affine())
-        console.log("NZ: ", i, pt.g.times(a).affine().toString(), prevHash.toString())
 				borromean = prevHash
 				proof.splice(0, 0, this.getRandom().mod(pt.q))
 				const check = commitment.times(prevHash).plus(pt.g.times(proof[0])).affine()
@@ -272,23 +283,12 @@ class Wallet {
       }
       check = rangeCommitments[i].minus(pt.h.times(1 << index)).times(prevHash).plus(pt.g.times(rangeProofs[i][1])).affine()
       prevHash = hash(check)
-      console.log("NZ: ", check.toString(), prevHash.toString())
       if (prevHash.neq(borromean)) {
         return false
       }
       sum = sum.plus(rangeCommitments[i])
     }
     return sum.eq(commitment)
-  }
-  
-  formatRangeProof(rangeProof) {
-    return [
-      rangeProof.commitment,
-      rangeProof.rangeCommitments,
-      rangeProof.rangeBorromeans,
-      rangeProof.rangeProofs,
-      rangeProof.indices
-    ].map(Wallet.formatItem).join(",")
   }
 
   static formatItem(item) {
@@ -300,9 +300,23 @@ class Wallet {
       return '"' + item.toString() + '"'
     }
   }
+  
+  static formatArguments(...args) {
+    return args.map(Wallet.formatItem).join(",")
+  }
+  
+  formatRangeProof(rangeProof) {
+    return Wallet.formatArguments(
+      rangeProof.commitment,
+      rangeProof.rangeCommitments,
+      rangeProof.rangeBorromeans,
+      rangeProof.rangeProofs,
+      rangeProof.indices
+    )
+  }
 
   formatRingProof(ringProof) {
-    return [
+    return Wallet.formatArguments(
       ringProof.funds.map(a => a.dest),
       ringProof.funds.map(a => a.commitment),
       ringProof.keyImage,
@@ -311,19 +325,25 @@ class Wallet {
       ringProof.imageFundProofs,
       ringProof.commitmentProofs,
       ringProof.outputHash
-    ].map(Wallet.formatItem).join(",")
+    )
   }
 
   constructor(mnemonic) {
     this.mnemonic = mnemonic
-    this.seed = hash(mnemonic)
+    this.masterKey = hash(mnemonic)
+    this.seed = hash(bigInt[0].plus(this.masterKey))
     // Generates private keys deterministically
-    this.privSeed = hash(this.seed.plus(1))
+    this.privSeed = hash(bigInt[1].plus(this.masterKey))
     // Generates sending keys deterministically
-    this.sentSeed = hash(this.seed.plus(2))
+    this.sentSeed = hash(bigInt[2].plus(this.masterKey))
     this.keys = []
     this.funds = []
     this.sent = []
+    this.changeKey = this.generateKey()
+  }
+  
+  saveWallet() {
+    
   }
 }
 

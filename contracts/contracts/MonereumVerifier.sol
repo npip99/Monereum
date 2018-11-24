@@ -29,10 +29,6 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
         uint256[2] memory sum = [uint256(0), uint256(0)];
         for (uint256 i = 0; i < indices.length; i++) {
             v.borromean = rangeBorromeans[i];
-            if (!isInQ(v.borromean)) {
-                emit BadRangeProofReason("Borromean was not in Q");
-                return false;
-            }
             if (!isInf(rangeCommitments[i]) && !eccvalid(rangeCommitments[i])) {
                 emit BadRangeProofReason("rangeCommitments were not all on curve");
                 return false;
@@ -209,7 +205,7 @@ contract MonereumVerifier is MonereumMath, MonereumConstants {
     mapping(uint256 => uint256[2]) hashSet;
     bool hashSetInitialized = false;
 
-    function getHashval(uint256 i) public constant returns (uint256[2] ret) {
+    function getHashVal(uint256 i) public constant returns (uint256[2] ret) {
         ret = hashSet[i];
     }
 
