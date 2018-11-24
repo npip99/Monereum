@@ -2,7 +2,7 @@ pragma solidity 0.4.25;
 
 contract MonereumInitializer {
     // Generates a valid point from some hash `h`, where discrete log is not known w.r.t any other base
-    function generateNextPoint(uint256 h, uint256 p) public returns (uint256[2] ret) {
+    function generateNextPoint(uint256 h, uint256 p) public pure returns (uint256[2] ret) {
         uint256 testX = h % p;
         while (true) {
             uint256 goal = mulmod(mulmod(testX, testX, p), testX, p);

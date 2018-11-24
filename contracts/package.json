@@ -1,7 +1,7 @@
 {
   "scripts": {
     "begin": "ganache-cli -l 35000000 --allowUnlimitedContractSize --debug -v > eth.log 2>&1 &",
-    "compile": "truffle compile --list",
+    "compile": "truffle compile",
     "test": "truffle test test/monereum.js",
 		"end": ""
   },

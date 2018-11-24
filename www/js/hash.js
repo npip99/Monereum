@@ -1,7 +1,15 @@
-const leftPad = require('left-pad');
 var CryptoJS = require('crypto-js');
 var sha3 = require('crypto-js/sha3');
 const bigInt = require('./bigint');
+
+const leftPad = (s, goal, rep) => {
+  const rem = goal - s.length
+  let ret = s
+  for(let i = 0; i < rem; i++) {
+    ret = rep + ret
+  }
+  return ret
+}
 
 const padInt = i => {
   if (i.bitLength && i.bitLength() > 256) {
@@ -23,6 +31,52 @@ const padItem = i => {
   }
 };
 
+const format = function() {
+  const parsedArgs = [];
+  let heap = "";
+  for (let i = 0; i < arguments.length; i++) {
+    const arg = arguments[i];
+    if (typeof arg === "string") {
+      let hex = padInt(arg.length)
+      for (let j = 0; j < arg.length; j++) {
+        hex += arg.charCodeAt(j).toString(16)
+      }
+      const remaining = hex.length % 64;
+      for (let j = 0; j < remaining; j++) {
+        hex += '0';
+      }
+      parsedArgs.push(heap.length / 2);
+      heap += hex;
+    } else if (arg.length) {
+      if (arg.static) {
+        parsedArgs.push(arg.map(padItem).join(""))
+      } else {
+        console.log("ITEM: ", arg, arg.map(a => a.static ? a.map(padItem).join("") : padItem(a)), "\n")
+        let hex = padInt(arg.length) + arg.map(a => a.static ? a.map(padItem).join("") : padItem(a)).join("")
+        parsedArgs.push(heap.length / 2);
+        heap += hex;
+      }
+    } else {
+      parsedArgs.push(padItem(arg));
+    }
+  }
+  let sizeOfArg = 0;
+  for (const i of parsedArgs) {
+    if (typeof i === "number") {
+      sizeOfArg += 32;
+    } else {
+      sizeOfArg += i.length / 2;
+    }
+  }
+  for (const i in parsedArgs) {
+    if (typeof parsedArgs[i] === "number") {
+      parsedArgs[i] = padInt(sizeOfArg + parsedArgs[i]);
+    }
+  }
+  const hex = parsedArgs.join("") + heap;
+  return hex;
+}
+
 const hash = function() {
   const parsedArgs = [];
   let heap = "";
@@ -43,7 +97,7 @@ const hash = function() {
       if (arg.static) {
         parsedArgs.push(arg.map(padItem).join(""))
       } else {
-        let hex = padInt(arg.length) + arg.map(padItem).join("")
+      let hex = padInt(arg.length) + arg.map(a => a.static ? a.map(padItem).join("") : padItem(a)).join("")
         parsedArgs.push(heap.length / 2);
         heap += hex;
       }
@@ -70,5 +124,7 @@ const hash = function() {
       outputLength: 256
   }).toString(), 16);
 }
+
+hash.format = format
 
 module.exports = hash

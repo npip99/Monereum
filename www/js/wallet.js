@@ -65,7 +65,7 @@ class Wallet {
     return key;
   }
 
-  createTransaction(pubKey, amount) {
+  createTransaction(pubKey, amount, noBlindingKey) {
     this.sentSeed = hash(this.sentSeed.xor(this.masterKey));
     
     const rand = this.sentSeed.mod(pt.q);
@@ -74,7 +74,7 @@ class Wallet {
     tx.src = pt.g.times(rand).affine()
     const secret = hash(pubKey.viewPub.times(rand).affine())
     tx.dest = pt.g.times(secret).plus(pubKey.spendPub).affine()
-    const blindingKey = hash(secret)
+    const blindingKey = noBlindingKey ? 0 : hash(secret)
     tx.senderData = {
       srcKey: rand,
       recipient: pubKey,
@@ -83,7 +83,7 @@ class Wallet {
       amount,
     }
     tx.commitment = pt.g.times(blindingKey).plus(pt.h.times(amount)).affine()
-    tx.commitmentAmount = hash(blindingKey).plus(amount).mod(pt.q)
+    tx.commitmentAmount = noBlindingKey ? amount : hash(blindingKey).plus(amount).mod(pt.q)
     return tx
   }
 
@@ -99,28 +99,38 @@ class Wallet {
     if (tx.receiverData) {
       return tx;
     }
-    const secret = hash(tx.src.times(key.viewKey).affine());
-    if (tx.dest.eq(pt.g.times(secret).plus(key.spendPub))) {
-      let privKey = null;
+    let secret = hash(tx.src.times(key.viewKey).affine());
+    let privKey = null;
+    if (tx.dest.eq(pt.g.times(key.spendKey))) {
+      secret = null;
+      privKey = key.spendKey;
+    } else if (tx.dest.eq(pt.g.times(secret).plus(key.spendPub))) {
       if (key.spendKey) {
         privKey = secret.plus(key.spendKey).mod(pt.q)
       }
-      const blindingKey = hash(secret)
-      const amount = tx.commitmentAmount.minus(hash(blindingKey)).mod(pt.q).plus(pt.q).mod(pt.q)
+    } else {
+      return null;
+    }
+    let blindingKey;
+    let amount;
+    if (tx.commitment.eq(pt.h.times(tx.commitmentAmount))) {
+      blindingKey = 0
+      amount = tx.commitmentAmount
+    } else {
+      blindingKey = hash(secret)
+      amount = tx.commitmentAmount.minus(hash(blindingKey)).mod(pt.q).plus(pt.q).mod(pt.q)
       if (tx.commitment.neq(pt.g.times(blindingKey).plus(pt.h.times(amount)))) {
         console.error("Bad TX: ", tx, key);
         return null;
       }
-      tx.receiverData = {
-        amount,
-        secret,
-        blindingKey,
-        privKey,
-      };
-      return tx;
-    } else {
-      return null;
     }
+    tx.receiverData = {
+      amount,
+      secret,
+      blindingKey,
+      privKey,
+    };
+    return tx;
   }
 
   isValidReceipt(tx, receipt) {

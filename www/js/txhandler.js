@@ -77,16 +77,6 @@ class TXHandler {
       rangeProofs: outs.map(out => this.wallet.createRangeProof(out)),
       ringProofs,
       outputs: outs,
-      /*funds: ringProofs.map(a => a.funds),
-      keyImages: ringProofs.map(a => a.keyImage),
-      commitment: ringProofs.map(a => a.commitment),
-      borromean: ringProofs.map(a => a.borromean),
-      imageFundProofs: ringProofs.map(a => a.imageFundProofs),
-      commitmentProofs: ringProofs.map(a => a.commitmentProofs),
-      outputDests: outs.map(a => a.dest),
-      outputSrcs: outs.map(a => a.src),
-      outputCommitments: outs.map(a => a.commitment),
-      commitmentAmounts: outs.map(a => a.commitmentAmount),*/
       minerFee
     }
   }

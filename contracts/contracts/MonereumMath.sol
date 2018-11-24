@@ -8,12 +8,13 @@ contract MonereumMath {
     // Note that both p and q are prime
     uint256 public constant p = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
     uint256 public constant q = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
+    uint256 public constant signBit = uint256(1) << 255;
     uint256[2] g = [uint256(1), uint256(2)];
     uint256[2] h;
 
     MonereumInitializer mi;
 
-    function getMonereumInitializer() public returns (address) {
+    function getMonereumInitializer() public view returns (address) {
         return mi;
     }
 
@@ -25,12 +26,12 @@ contract MonereumMath {
         h = mi.generateNextPoint(hashP(g), p);
     }
 
-    function G() public constant returns (uint256[2]) {
-        return g;
+    function G() public constant returns (uint256[2] ret) {
+        ret = g;
     }
 
-    function H() public constant returns (uint256[2]) {
-        return h;
+    function H() public constant returns (uint256[2] ret) {
+        ret = h;
     }
 
     // All points other than the point at infinity will have order q
@@ -47,7 +48,7 @@ contract MonereumMath {
     }
     
     // Excludes [0, 0]
-    function eccvalid(uint256[2] p1) public constant returns (bool) {
+    function eccvalid(uint256[2] p1) public pure returns (bool) {
         if (p1[0] >= p || p1[1] >= p) {
             return false;
         }
@@ -59,7 +60,14 @@ contract MonereumMath {
         } else {
             return false;
         }
-    } 
+    }
+    
+    function compress(uint256[2] p1) public pure returns (uint256 ret) {
+        ret = p1[0];
+        if ((p1[1] & 1) == 1)
+            ret |= signBit;
+        return ret;
+    }
 
     function ecadd(uint256[2] p1, uint256[2] p2) public constant returns (uint256[2] ret) {
         // With a public key (x, y), this computes p = scalar * (x, y).

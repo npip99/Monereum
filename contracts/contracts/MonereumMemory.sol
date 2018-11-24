@@ -47,7 +47,7 @@ contract MonereumMemory is MonereumConstants, MonereumMath {
     }
 
     struct Transaction {
-        uint256[2] commitment;
+        uint256 commitment;
         Status status;
     }
 
