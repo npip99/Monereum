@@ -4,3 +4,5 @@ contracts/build
 contracts/eth.log
 www/js/static
 www/js/watch.log
+www/js/serve.log
+

@@ -263,6 +263,7 @@ class Wallet {
 				// Solving prevHash*(blindingKey*G+amount*H - amount*H) + proof*G = a*G
 				proof[1] = a.minus(prevHash.times(blindingKey)).mod(pt.q).plus(pt.q).mod(pt.q)
 			}
+      proof.static = true
 			rangeCommitments.push(commitment)
 			rangeBorromeans.push(borromean)
 			rangeProofs.push(proof)

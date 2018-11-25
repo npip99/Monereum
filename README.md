@@ -20,7 +20,7 @@ In order to develop on this repository, please install `npm`:
 ```
 sudo apt install npm
 ```
-You'll also have to execute `npm i` in the `./contracts` and `./www/js` directories. You can see the available scripts by executing `npm run`.
+You'll also have to execute `npm i` in the `./contracts` and `./www/js` directories. You can open the web server by running `. run.sh` in the `./www` directory.
 
 ## How Monereum Works
 
