@@ -235,7 +235,7 @@ contract MonereumBlockchain is MonereumMemory {
             rangeStatuses[rangeProofHash] = ProofStatus.Rejected;
         }
     }
-
+    
     function commitRingGroup(
         uint256[] outputIDs,
         uint256[] ringHashes
@@ -401,7 +401,6 @@ contract MonereumBlockchain is MonereumMemory {
         )));
         emit LogRangeProof(
             ringGroupHash,
-            outputIDs,
             commitment,
             rangeCommitments,
             rangeBorromeans,
@@ -418,7 +417,6 @@ contract MonereumBlockchain is MonereumMemory {
 
     event LogRangeProof(
         uint256 ringGroupHash,
-        uint256[] outputIDs,
         uint256[2] commitment,
         uint256[2][] rangeCommitments,
         uint256[] rangeBorromeans,
