@@ -236,6 +236,8 @@ contract MonereumBlockchain is MonereumMemory {
         }
     }
     
+    event RingGroupCommitted(uint256 ringGroupHash);
+    
     function commitRingGroup(
         uint256[] outputIDs,
         uint256[] ringHashes
@@ -256,6 +258,8 @@ contract MonereumBlockchain is MonereumMemory {
         } else {
             ethBalances[goodRingGroupBountyHolders[ringGroupHash]] += goodRingBountyAmount;
         }
+        
+        emit RingGroupCommitted(ringGroupHash);
 
         // Claim gas
         goodRingGroupBountyHolders[ringGroupHash] = 0;

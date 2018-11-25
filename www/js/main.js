@@ -30,10 +30,6 @@ window.addEventListener('load', async () => {
         console.log('Non-Ethereum browser detected. You should consider trying MetaMask!');
     }
     
-    
-    // Initializer: 0xa221eb60a21d88e76eff072d3bae3d49d852b610
-    // Verifier: 0x4e8491ea3162c700584fcd6565f4ac4a1edcc37e
-    // Blockchain: 0xf95091d0164bd0f8b898e9d8e5b9e32c375ea26c
     pubhash = hash
     salt = bigInt.randBetween(0, bigInt[2].pow(256)).toString()
     const w1 = new wallet("Alice" + salt);

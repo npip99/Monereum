@@ -3,17 +3,17 @@ const wallet = require('./wallet')
 const hash = require('./hash')
 const pt = require('./ecc-point')
 const parser = require('./parser')
+const constants = require('./constants')
 
 class TXHandler {
   constructor(wallet, web3) {
     this.wallet = wallet
     this.web3 = web3
-    this.mixin = 3
     this.txs = {}
+    this.pendingRingGroups = {}
     this.ringProofs = {}
     this.ringGroups = {}
     this.watched = {}
-    this.blockchain = '0x5a66f73c32cc8726195efd2d84c1826844c155cc'
   }
   
   sync() {
@@ -21,8 +21,8 @@ class TXHandler {
     const ringProofs = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
-        address: this.blockchain,
-        topics: ['0x10fb3bbe7498ab3629d1c50174bb812df94d0464d43954c157d9461fa3571812']
+        address: constants.blockchain,
+        topics: [constants.ringProofTopic]
     })
     
     ringProofs.watch((error, result) => {
@@ -31,7 +31,7 @@ class TXHandler {
       }
       this.watched[result.transactionHash] = true
       console.log(result)
-      const rp = parser.parseRingProof(parser.initParser(result.data), this.mixin)
+      const rp = parser.parseRingProof(parser.initParser(result.data))
       const funds = []
       for (let fund of rp.funds) {
         const id = hash(fund)
@@ -48,8 +48,8 @@ class TXHandler {
     const ringGroups = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
-        address: this.blockchain,
-        topics: ['0xa7d50b5bcb8e20d7ea0f28f37292f7fddf86922bf189a6649010d8bb91601c80']
+        address: constants.blockchain,
+        topics: [constants.ringGroupTopic]
     })
     
     ringGroups.watch((error, result) => {
@@ -66,8 +66,8 @@ class TXHandler {
     const transactions = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
-        address: this.blockchain,
-        topics: ['0x3561fef1c2638b4d3b0aeeb484ac2226770002c6aa4633e0e69fc9be8628409c']
+        address: constants.blockchain,
+        topics: [constants.transactionTopic]
     })
     
     transactions.watch((error, result) => {
@@ -83,8 +83,8 @@ class TXHandler {
     const rangeProofs = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
-        address: this.blockchain,
-        topics: ['0xeb6dec7e3fdcb7aaf43ebace8320d1cc3b1ca503c930e6a3746049e125c11e16']
+        address: constants.blockchain,
+        topics: [constants.rangeProofTopic]
     })
     
     rangeProofs.watch((error, result) => {
@@ -164,7 +164,7 @@ class TXHandler {
     let blindingSum = outs.reduce((a, b) => a.plus(b.senderData.blindingKey), bigInt[0])
     const ringProofs = []
     for (const [i, fund] of funds.entries()) {
-      const mixers = this.getMixers(this.mixin - 1)
+      const mixers = this.getMixers(constants.mixin - 1)
       let blindingKey;
       if (i === funds.length - 1) {
         blindingKey = blindingSum.mod(pt.q).plus(pt.q).mod(pt.q)

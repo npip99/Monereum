@@ -1,6 +1,7 @@
 const wallet = require('./wallet')
 const hash = require('./hash')
 const parser = require('./parser')
+const constants = require('./constants')
 
 const zip = (arr, ...arrs) => {
   return arr.map((val, i) => arrs.reduce((a, arr) => [...a, arr[i]], [val]));
@@ -10,8 +11,6 @@ class Miner {
   constructor(wallet, web3) {
     this.wallet = wallet
     this.web3 = web3
-    this.mixin = 3
-    this.blockchain = '0x5a66f73c32cc8726195efd2d84c1826844c155cc'
     this.pending = {}
     this.rangeProofsRemaining = {}
     this.watched = {}
@@ -19,8 +18,8 @@ class Miner {
     const ringGroups = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
-        address: this.blockchain,
-        topics: ['0xa7d50b5bcb8e20d7ea0f28f37292f7fddf86922bf189a6649010d8bb91601c80']
+        address: constants.blockchain,
+        topics: [constants.ringGroupTopic]
     })
     
     ringGroups.watch((error, result) => {
@@ -41,7 +40,7 @@ class Miner {
           const data = func + hash.format(...rp)
           console.log(data)
           this.web3.eth.sendTransaction({
-            to: this.blockchain,
+            to: constants.blockchain,
             data: data,
             gasPrice: 5e9,
           }, (error, hash) => {
@@ -54,8 +53,8 @@ class Miner {
     const rangeProofs = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
-        address: this.blockchain,
-        topics: ['0xeb6dec7e3fdcb7aaf43ebace8320d1cc3b1ca503c930e6a3746049e125c11e16']
+        address: constants.blockchain,
+        topics: [constants.rangeProofTopic]
     })
     
     rangeProofs.watch((error, result) => {
@@ -73,13 +72,13 @@ class Miner {
             const func = hash.padItem(hash.funcHash("commitRingGroup(uint256[],uint256[])")).slice(0, 4*2)
             const data = func + hash.format(outputIDs, ringHashes)
             this.web3.eth.sendTransaction({
-              to: this.blockchain,
+              to: constants.blockchain,
               data: data,
               gasPrice: 5e9,
             }, (error, hash) => {
               console.log("COMMITRINGGROUP RESULT: ", error, hash)
             })
-          }, 2*60*1000)
+          }, constants.disputeTime*1000)
         }
       }
       console.log("RangeProof: ", rangeProof)
@@ -94,7 +93,7 @@ class Miner {
     const func = hash.padItem(hash.funcHash("mint(uint256[2],uint256[2],uint256)")).slice(0, 4*2)
     const data = func + hash.format(tx.src, tx.dest, tx.commitmentAmount)
     this.web3.eth.sendTransaction({
-        to: this.blockchain,
+        to: constants.blockchain,
         data: data,
         gasPrice: 5e9,
     }, (error, hash) => {
@@ -108,10 +107,10 @@ class Miner {
       return
     }
     const {ringGroupHash, ringHashes, outputIDs, submit, rangeProofs} = this.formatSubmit(tx)
-    const func = hash.padItem(hash.funcHash("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],uint256,uint256[2])".replace(/MIXIN/g, this.mixin)))
+    const func = hash.padItem(hash.funcHash("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],uint256,uint256[2])".replace(/MIXIN/g, constants.mixin)))
     const data = func.slice(0, 4*2) + hash.format(...submit)
     this.web3.eth.sendTransaction({
-        to: this.blockchain,
+        to: constants.blockchain,
         data: data,
         gasPrice: 5e9,
     }, (error, hash) => {
