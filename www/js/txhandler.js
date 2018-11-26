@@ -16,8 +16,11 @@ class TXHandler {
     this.watched = {}
   }
   
+  addDecryptHandler(h) {
+    this.decryptHandler = h
+  }
+  
   sync() {
-    console.log(this)
     const ringProofs = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
@@ -26,10 +29,6 @@ class TXHandler {
     })
     
     ringProofs.watch((error, result) => {
-      if (this.watched[result.transactionHash]) {
-        return
-      }
-      this.watched[result.transactionHash] = true
       console.log(result)
       const rp = parser.parseRingProof(parser.initParser(result.data))
       const funds = []
@@ -41,9 +40,9 @@ class TXHandler {
         funds.push(this.txs[id])
       }
       rp.funds = funds
-      console.log("RingProof: ", rp, this.wallet.verifyRingProof(rp))
+      console.log("RingProof: ", JSON.stringify(rp, null, '\t'), this.wallet.verifyRingProof(rp))
       this.ringProofs[rp.ringHash] = rp
-    })    
+    })
     
     const ringGroups = this.web3.eth.filter({
         from: 0,
@@ -53,13 +52,9 @@ class TXHandler {
     })
     
     ringGroups.watch((error, result) => {
-      if (this.watched[result.transactionHash]) {
-        return
-      }
-      this.watched[result.transactionHash] = true
       console.log(result)
       const ringGroup = parser.parseRingGroup(parser.initParser(result.data))
-      console.log("RingGroup: ", ringGroup)
+      console.log("RingGroup: ", JSON.stringify(ringGroup, null, '\t'))
       this.ringGroups[ringGroup.ringGroupHash] = ringGroup
     })
     
@@ -71,10 +66,7 @@ class TXHandler {
     })
     
     transactions.watch((error, result) => {
-      if (this.watched[result.transactionHash]) {
-        return
-      }
-      this.watched[result.transactionHash] = true
+      console.log(result)
       const tx = parser.parseTransaction(parser.initParser(result.data))
       console.log("Transaction: ", tx.src.toString(), tx.dest.toString(), tx.commitment.toString(), tx.commitmentAmount.toString())
       this.addtx(tx)
@@ -88,13 +80,9 @@ class TXHandler {
     })
     
     rangeProofs.watch((error, result) => {
-      if (this.watched[result.transactionHash]) {
-        return
-      }
-      this.watched[result.transactionHash] = true
       console.log(result)
       const rangeProof = parser.parseRangeProof(parser.initParser(result.data))
-      console.log("RangeProof: ", rangeProof)
+      console.log("RangeProof: ", JSON.stringify(rangeProof, null, '\t'))
     })
   }
   
@@ -118,6 +106,9 @@ class TXHandler {
     }
     if (this.wallet.tryDecryptTransaction(tx)) {
       this.wallet.addReceivedTransaction(tx)
+      if (this.decryptHandler) {
+        this.decryptHandler(tx)
+      }
       console.log("TX Decrypted: ", tx)
     }
     tx.id = tx.id || hash(tx.dest)
@@ -141,9 +132,23 @@ class TXHandler {
     return mixers
   }
   
-  sendMoney(pubKey, amount) {
-    const minerFee = 3
-    const collection = this.wallet.collectAmount(amount + minerFee)
+  static createMint(pubKey, amount) {
+    const rand = bigInt.randBetween(0, bigInt[2].pow(256)).mod(pt.q)
+    
+		amount = bigInt(amount)
+    const tx = {}
+    tx.src = pt.g.times(rand).affine()
+    const secret = hash(pubKey.viewPub.times(rand).affine())
+    tx.dest = pt.g.times(secret).plus(pubKey.spendPub).affine()
+    tx.commitment = pt.h.times(amount).affine()
+    tx.commitmentAmount = amount
+    return tx;
+  }
+  
+  createFullTx(pubKey, amount, minerFee) {
+    amount = bigInt(amount)
+    minerFee = bigInt(minerFee)
+    const collection = this.wallet.collectAmount(amount.plus(minerFee))
     if (!collection) {
       return null
     }
@@ -175,12 +180,33 @@ class TXHandler {
       console.log(fund, mixers, outputHash, blindingKey)
       ringProofs.push(this.wallet.createRingProof(fund, mixers, outputHash, blindingKey))
     }
-    return {
+    const fullTX = {
       rangeProofs: outs.map(out => this.wallet.createRangeProof(out)),
       ringProofs,
       outputs: outs,
-      minerFee
+      minerFee,
     }
+    const cleanTX = tx => {
+      return {
+        id: tx.id,
+        src: tx.src,
+        dest: tx.dest,
+        commitment: tx.commitment,
+        commitmentAmount: tx.commitmentAmount,
+      }
+    }
+    fullTX.toJSON = function() {
+      return {
+        rangeProofs: this.rangeProofs,
+        ringProofs: this.ringProofs.map(rp => {
+          rp.funds = rp.funds.map(cleanTX)
+          return rp
+        }),
+        outputs: this.outputs.map(cleanTX),
+        minerFee: this.minerFee,
+      }
+    }
+    return fullTX
   }
 }
 

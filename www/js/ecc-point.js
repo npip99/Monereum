@@ -43,12 +43,16 @@ class ECCPoint {
 				} else {
 					this.z = bigInt(z);
 				}
+				if (this.x.eq(0) && this.y.eq(0)) {
+					this.z = bigInt[0]
+				}
     }
 
 		hashInP() {
 			if (this.hashedInP) {
 				return this.hashedInP
 			}
+			this.affine()
 			const pHash = hash(this).toArray(2).value.reverse()
 			let hashGenerator = ECCPoint.zero
 			for (let i = 0; i < 128; i++) {
@@ -60,6 +64,12 @@ class ECCPoint {
 		}
 
     eq(pt) {
+				if (this.isInf()) {
+					return pt.isInf()
+				}
+				if (pt.isInf()) {
+					return this.isInf()
+				}
     		const p = ECCPoint.p
 				const z12 = this.z.square()
 				const z13 = z12.times(this.z)
@@ -74,14 +84,17 @@ class ECCPoint {
     }
 
     isInf() {
-    		return this.eq(ECCPoint.zero);
+    		return this.z.eq(0);
     }
 
     isInP() {
-    		return this.x.lt(ECCPoint.p) && this.y.lt(ECCPoint.p) && this.z.eq(1) && this.isOnCurve();
+    		return this.x.lt(ECCPoint.p) && this.y.lt(ECCPoint.p);
     }
 
     isOnCurve() {
+				if (this.isInf()) {
+					return false
+				}
 				const p = ECCPoint.p
     		const x = this.x
         const y = this.y
@@ -95,6 +108,9 @@ class ECCPoint {
     }
 
     minus(pt) {
+				if (pt.isInf()) {
+					return this
+				}
     		return this.plus(new ECCPoint(pt.x, bigInt[0].minus(pt.y), pt.z));
     }
 
@@ -134,8 +150,8 @@ class ECCPoint {
 			if (this.dub) {
 				return this.dub
 			}
-			if (this.y == 0) {
-				return ECCPoint.zero
+			if (this.isInf()) {
+				return this.dub = ECCPoint.zero
 			}
 			const p = ECCPoint.p
 			const x2 = this.x.square()
@@ -153,12 +169,19 @@ class ECCPoint {
 
 		triple() {
 			if (!this.trip) {
-				this.trip = this.double().plus(this)
+				if (this.isInf()) {
+					this.trip = ECCPoint.zero
+				} else {
+					this.trip = this.double().plus(this)
+				}
 			}
 			return this.trip
 		}
 
     times(s) {
+				if (this.isInf()) {
+					return ECCPoint.zero
+				}
     		s = bigInt(s).mod(ECCPoint.q).plus(ECCPoint.q).mod(ECCPoint.q)
         let bin = s.toArray(2).value
         let ans = ECCPoint.zero
@@ -173,6 +196,11 @@ class ECCPoint {
     }
 
 		affine() {
+			if (this.isInf()) {
+				this.x = bigInt[0]
+				this.y = bigInt[0]
+				return this
+			}
 			const p = ECCPoint.p
 			const zinv = this.z.modInv(p)
 			const zinv2 = zinv.times(zinv)
@@ -188,6 +216,7 @@ class ECCPoint {
 			this.x = x
 			this.y = y
 			this.z = bigInt[1]
+			this.zz = bigInt[1]
 			return this;
 		}
 

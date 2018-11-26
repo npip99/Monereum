@@ -30,39 +30,86 @@ window.addEventListener('load', async () => {
         console.log('Non-Ethereum browser detected. You should consider trying MetaMask!');
     }
     
-    pubhash = hash
+    result = document.getElementById("result")
+    log = document.getElementById("log")
+    
     salt = bigInt.randBetween(0, bigInt[2].pow(256)).toString()
-    const w1 = new wallet("Alice" + salt);
-    const w2 = new wallet("Bob" + salt);
+    m = new miner(new wallet("miner" + salt), window.web3)
+    owner = new wallet("Bob" + salt);
+    handler = new txhandler(owner, window.web3)
+    handler.sync()
+    handler.addDecryptHandler(tx => {
+      log.innerHTML += JSON.stringify(tx)
+    })
+    
+    getPublicKey = e => {
+      e.preventDefault()
+      result.innerHTML = JSON.stringify(handler.getPublicKey())
+    }
+    
+    createTx = e => {
+      e.preventDefault()
+      const form = e.target
+      const amount = form.elements.amount.value
+      const key = handler.getPublicKey()
+      result.innerHTML = JSON.stringify(txhandler.createMint(key, amount))
+    }
+    
+    createFullTx = e => {
+      e.preventDefault()
+      const form = e.target
+      const pubKey = form.elements.to.value
+      const amount = form.elements.amount.value
+      console.log(pubKey, amount)
+      result.innerHTML = JSON.stringify(handler.createFullTx(parser.parseJSONKey(JSON.parse(pubKey)), amount, 3))
+    }
+    
+    mintTx = e => {
+      e.preventDefault()
+      const form = e.target
+      const tx = form.elements.tx.value
+      m.mint(parser.parseJSONTx(JSON.parse(tx)))
+    }
+    
+    submitFullTx = e => {
+      e.preventDefault()
+      const form = e.target
+      const fullTx = form.elements.fullTx.value
+      m.submit(parser.parseJSONFullTx(JSON.parse(fullTx)))
+    }
+    
+    
+    /*
     const w3 = new wallet("Eve" + salt);
     const handler = new txhandler(w2, window.web3)
     const m = new miner(new wallet("miner" + salt), window.web3)
     const bobkey = handler.getPublicKey()
     const evekey = w3.generateKey()
-    const tx1 = w1.createTransaction(bobkey, 20000, true)
-    const tx2 = w1.createTransaction(bobkey, 10000, true)
-    const tx3 = w1.createTransaction(evekey, 25, true)
-    const tx4 = w1.createTransaction(evekey, 26, true)
+    const tx1 = txhandler.createMint(bobkey, 20000)
+    const tx2 = txhandler.createMint(bobkey, 10000)
+    const tx3 = txhandler.createMint(evekey, 25)
+    const tx4 = txhandler.createMint(evekey, 26)
     ;[tx1, tx2, tx3, tx4].map(tx => {
       console.log("=== MINT ===")
-      console.log(wallet.formatArguments(tx.src, tx.dest, tx.commitmentAmount))
-      //handler.addtx(tx)
-      m.mint(tx)
+      console.log(JSON.stringify(tx, null, '\t'))
+      txStr = JSON.stringify(tx, null, '\t')
+      //m.mint(miner.parseTx(txStr))
     });
     submitit = () => {
       console.log(handler.txs)
-      const fullTx = handler.sendMoney(evekey, 25000)
+      const fullTx = handler.createFullTx(evekey, 25000, 3)
+      fullTxStr = JSON.stringify(fullTx, null, '\t')
       for(let i = 0; i < fullTx.rangeProofs.length; i++) {
         console.log("==== RANGEPROOF " + i + " ====")
-        console.log(w2.formatRangeProof(fullTx.rangeProofs[i]))
+        console.log(fullTx.rangeProofs[i])
       }
       for(let i = 0; i < fullTx.ringProofs.length; i++) {
         console.log("==== RINGPROOF " + i + " ====")
-        console.log(w2.formatRingProof(fullTx.ringProofs[i]))
+        console.log(fullTx.ringProofs[i])
       }
-      //console.log("=== SUBMIT ===\n", wallet.formatArguments(...m.formatTx(fullTx).submit));
-      m.submit(fullTx)
+      m.submit(miner.parseFullTx(fullTxStr))
     }
+    */
     
     //handler.addtxs([tx1, tx2, tx3, tx4, tx5, tx6, tx7])
     //console.log(w2.collectAmount(25000))
@@ -115,6 +162,5 @@ window.addEventListener('load', async () => {
     //console.log(JSON.stringify(tx))
     //console.log(JSON.stringify(tx))
     //console.log(JSON.stringify({"hey" : new pt(1, 2)}))
-    handler.sync()
 });
 

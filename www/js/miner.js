@@ -2,6 +2,8 @@ const wallet = require('./wallet')
 const hash = require('./hash')
 const parser = require('./parser')
 const constants = require('./constants')
+const pt = require('./ecc-point')
+const bigInt = require('big-integer')
 
 const zip = (arr, ...arrs) => {
   return arr.map((val, i) => arrs.reduce((a, arr) => [...a, arr[i]], [val]));
@@ -138,6 +140,8 @@ class Miner {
       const txRingProof = tx.ringProofs[i]
       const ringProof = [txRingProof.funds.map(f => f.dest), txRingProof.keyImage, txRingProof.commitment, txRingProof.borromean, txRingProof.imageFundProofs, txRingProof.commitmentProofs, outputHash]
       ringProof[0].static = true
+      ringProof[4].static = true
+      ringProof[5].static = true
       const ringHash = hash(...ringProof)
       ringProofs.push(ringProof)
       ringHashes.push(ringHash)

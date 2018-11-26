@@ -27,16 +27,16 @@ class Wallet {
   }
   
   collectAmount(goalAmount) {
-    let amount = 0
+    let amount = bigInt[0]
     const funds = []
     for(const fund of this.funds) {
       funds.push(fund)
-      amount += fund.receiverData.amount
-      if (amount >= goalAmount) {
+      amount = amount.plus(fund.receiverData.amount)
+      if (amount.geq(goalAmount)) {
         break
       }
     }
-    if (amount < goalAmount) {
+    if (amount.lt(goalAmount)) {
       return null
     }
     return {
@@ -56,8 +56,8 @@ class Wallet {
     const spend = this.privSeed.mod(pt.q)
     const view = hash(spend).mod(pt.q)
     const key = {
-      spendPub: pt.g.times(spend),
-      viewPub: pt.g.times(view),
+      spendPub: pt.g.times(spend).affine(),
+      viewPub: pt.g.times(view).affine(),
       spendKey: spend,
       viewKey: view
     }

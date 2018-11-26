@@ -4,7 +4,7 @@
   "description": "Frontend for a Monereum market and wallet platform",
   "main": "main.js",
   "scripts": {
-    "serve": "cd ../ && serve -s",
+    "serve": "cd ../ && serve && cd ./js",
     "watch": "watchify main.js -d -o ./static/bundle.js -v [ babelify --presets [ @babel/preset-env ] ]",
     "build": "mkdir -p static && browserify main.js -t [ babelify --presets [ @babel/preset-env ] ] | uglifyjs -mco ./static/bundle.js"
   },
