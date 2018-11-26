@@ -29,24 +29,23 @@ class Miner {
         return
       }
       this.watched[result.transactionHash] = true
-      console.log(result)
       const {ringGroupHash, outputIDs, ringHashes} = parser.parseRingGroup(parser.initParser(result.data))
-      console.log("RingGroup: ", ringGroupHash)
       const ringGroupData = this.pending[ringGroupHash]
       if (ringGroupData) {
+        console.log("RingGroup of Range Proof recognized: ", ringGroupHash)
         const rangeProofs = ringGroupData.rangeProofs
-        console.log("RANGEPROOFS FOUND: ", rangeProofs)
         this.rangeProofsRemaining[ringGroupHash] = rangeProofs.length
         const func = hash.padItem(hash.funcHash("logRangeProof(uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")).slice(0, 4*2)
         rangeProofs.forEach(rp => {
           const data = func + hash.format(...rp)
-          console.log(data)
           this.web3.eth.sendTransaction({
             to: constants.blockchain,
             data: data,
             gasPrice: 5e9,
           }, (error, hash) => {
-            console.log("RANGEPROOF RESULT: ", error, hash)
+            if (error) {
+              console.error("Range Proof Failed")
+            }
           })
         })
       }
@@ -64,10 +63,9 @@ class Miner {
         return
       }
       this.watched[result.transactionHash] = true
-      console.log(result)
       const rangeProof = parser.parseRangeProof(parser.initParser(result.data))
-      console.log("RANGEPROOF: ", rangeProof)
       if (this.rangeProofsRemaining[rangeProof.ringGroupHash]) {
+        console.log("Range Proof of ", rangeProof.ringGroupHash, " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
         if((--this.rangeProofsRemaining[rangeProof.ringGroupHash]) == 0) {
           setTimeout(() => {
             const {outputIDs, ringHashes} = this.pending[rangeProof.ringGroupHash]
@@ -78,12 +76,13 @@ class Miner {
               data: data,
               gasPrice: 5e9,
             }, (error, hash) => {
-              console.log("COMMITRINGGROUP RESULT: ", error, hash)
+              if (error) {
+                console.error("Commit Ring Failed")
+              }
             })
           }, constants.disputeTime*1000)
         }
       }
-      console.log("RangeProof: ", rangeProof)
     })
   }
   
@@ -99,13 +98,15 @@ class Miner {
         data: data,
         gasPrice: 5e9,
     }, (error, hash) => {
-      console.log("MINT RESULT: ", error, hash)
+      if (error) {
+        console.error("Mint failed")
+      }
     })
   }
   
   submit(tx) {
     if (!tx) {
-      console.log("Tried to submit NonExistant tx")
+      console.log("Tried to submit Non-Existant Tx")
       return
     }
     const {ringGroupHash, ringHashes, outputIDs, submit, rangeProofs} = this.formatSubmit(tx)
@@ -116,12 +117,12 @@ class Miner {
         data: data,
         gasPrice: 5e9,
     }, (error, hash) => {
-      if (!error) {
+      if (error) {
+        console.error("Submit Failed")
+      } else {
         this.pending[ringGroupHash] = {rangeProofs, ringHashes, outputIDs}
       }
-      console.log("SUBMIT RESULT: ", error, hash)
     })
-    console.log(func, hash.format(...submit))
   }
   
   formatSubmit(tx) {

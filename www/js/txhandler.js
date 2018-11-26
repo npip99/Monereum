@@ -10,10 +10,17 @@ class TXHandler {
     this.wallet = wallet
     this.web3 = web3
     this.txs = {}
-    this.pendingRingGroups = {}
-    this.ringProofs = {}
+    
+    // tx
+    // ringGroupHash
+    this.transactions = {}
+    
+    // ringGroup
+    // ringProofs
+    // rangeProofs
     this.ringGroups = {}
-    this.watched = {}
+    
+    this.rings = {}
   }
   
   addDecryptHandler(h) {
@@ -21,27 +28,34 @@ class TXHandler {
   }
   
   sync() {
-    const ringProofs = this.web3.eth.filter({
+    const initTx = function(id) {
+      if (!this.transactions[id]) {
+        this.transactions[id] = {}
+      }
+      return this.transactions[id]
+    }.bind(this)
+    
+    const initRingGroup = function(ringGroupHash) {
+      if (!this.ringGroups[ringGroupHash]) {
+        this.ringGroups[ringGroupHash] = {}
+        this.ringGroups[ringGroupHash].ringProofs = []
+        this.ringGroups[ringGroupHash].rangeProofs = []
+      }
+      return this.ringGroups[ringGroupHash]
+    }.bind(this)
+    
+    const initRing = function(ringHash) {
+      if (!this.rings[ringHash]) {
+        this.rings[ringHash] = {}
+      }
+      return this.rings[ringHash]
+    }.bind(this)
+    
+    const transactions = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
         address: constants.blockchain,
-        topics: [constants.ringProofTopic]
-    })
-    
-    ringProofs.watch((error, result) => {
-      console.log(result)
-      const rp = parser.parseRingProof(parser.initParser(result.data))
-      const funds = []
-      for (let fund of rp.funds) {
-        const id = hash(fund)
-        if (!this.txs[id]) {
-          console.log("ringProof with unknown TX")
-        }
-        funds.push(this.txs[id])
-      }
-      rp.funds = funds
-      console.log("RingProof: ", JSON.stringify(rp, null, '\t'), this.wallet.verifyRingProof(rp))
-      this.ringProofs[rp.ringHash] = rp
+        topics: [constants.transactionTopic]
     })
     
     const ringGroups = this.web3.eth.filter({
@@ -51,25 +65,11 @@ class TXHandler {
         topics: [constants.ringGroupTopic]
     })
     
-    ringGroups.watch((error, result) => {
-      console.log(result)
-      const ringGroup = parser.parseRingGroup(parser.initParser(result.data))
-      console.log("RingGroup: ", JSON.stringify(ringGroup, null, '\t'))
-      this.ringGroups[ringGroup.ringGroupHash] = ringGroup
-    })
-    
-    const transactions = this.web3.eth.filter({
+    const ringProofs = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
         address: constants.blockchain,
-        topics: [constants.transactionTopic]
-    })
-    
-    transactions.watch((error, result) => {
-      console.log(result)
-      const tx = parser.parseTransaction(parser.initParser(result.data))
-      console.log("Transaction: ", tx.src.toString(), tx.dest.toString(), tx.commitment.toString(), tx.commitmentAmount.toString())
-      this.addtx(tx)
+        topics: [constants.ringProofTopic]
     })
     
     const rangeProofs = this.web3.eth.filter({
@@ -79,10 +79,85 @@ class TXHandler {
         topics: [constants.rangeProofTopic]
     })
     
+    transactions.watch((error, result) => {
+      const tx = parser.parseTransaction(parser.initParser(result.data))
+      const txData = initTx(tx.id)
+      if (txData.tx) {
+        return
+      }
+      console.log("Transaction Received: ", JSON.stringify(tx, null, '\t'))
+      txData.tx = tx
+      this.addTx(tx)
+    })
+    
+    ringGroups.watch((error, result) => {
+      const ringGroup = parser.parseRingGroup(parser.initParser(result.data))
+      if (this.ringGroups[ringGroup.ringGroupHash]) {
+        return
+      }
+      console.log("RingGroup Received: ", JSON.stringify(ringGroup, null, '\t'))
+      const ringGroupData = initRingGroup(ringGroup.ringGroupHash)
+      for (const outputID of ringGroup.outputIDs) {
+        const txData = initTx(outputID)
+        txData.ringGroupHash = ringGroup.ringGroupHash
+      }
+      for (const ringHash of ringGroup.ringHashes) {
+        const ringData = initRing(ringHash)
+        if (ringData.ringProof) {
+          ringGroupData.ringProofs.push(ringData.ringProof)
+        }
+        ringData.ringGroupHash = ringGroup.ringGroupHash
+      }
+      ringGroupData.ringGroup = ringGroup
+    })
+    
+    ringProofs.watch((error, result) => {
+      const rp = parser.parseRingProof(parser.initParser(result.data))
+      const ringData = initRing(rp.ringHash)
+      if (ringData.ringProof) {
+        return
+      }
+      ringData.ringProof = rp
+      if (ringData.ringGroupHash) {
+        this.ringGroups[ringData.ringGroupHash].ringProofs.push(rp)
+      }
+      const funds = []
+      for (const fund of rp.funds) {
+        const id = hash(fund)
+        if (!this.transactions[id].tx) {
+          console.error("ringProof with unknown TX", result, id)
+        }
+        funds.push(this.transactions[id].tx)
+      }
+      rp.funds = funds
+      console.log("RingProof Received: ", JSON.stringify(rp, null, '\t'))
+      console.log("RingProof Verified: ", this.wallet.verifyRingProof(rp))
+    })
+    
     rangeProofs.watch((error, result) => {
-      console.log(result)
-      const rangeProof = parser.parseRangeProof(parser.initParser(result.data))
-      console.log("RangeProof: ", JSON.stringify(rangeProof, null, '\t'))
+      const rp = parser.parseRangeProof(parser.initParser(result.data))
+      const ringGroupData = this.ringGroups[rp.ringGroupHash]
+      if (!ringGroupData) {
+        console.error("Ring Proof without Ring Group!", rp, ringGroupHash)
+        return
+      }
+      rp.rangeProofHash = hash(
+        rp.ringGroupHash,
+        ringGroupData.ringGroup.outputIDs,
+        rp.commitment,
+        rp.rangeCommitments,
+        rp.rangeBorromeans,
+        rp.rangeProofs,
+        rp.indices
+      );
+      for (const otherRp of ringGroupData.rangeProofs) {
+        if (otherRp.rangeProofHash.eq(rp.rangeProofHash)) {
+          return
+        }
+      }
+      ringGroupData.rangeProofs.push(rp)
+      console.log("RangeProof Received: ", JSON.stringify(rp, null, '\t'))
+      console.log("RangeProof Verified: ", this.wallet.verifyRangeProof(rp))
     })
   }
   
@@ -94,14 +169,15 @@ class TXHandler {
     }
   }
   
-  addtxs(txs) {
+  addTxs(txs) {
     for(const tx of txs) {
       this.addtx(tx)
     }
   }
   
-  addtx(tx) {
-    if (this.hastx(tx)) {
+  addTx(tx) {
+    if (this.hasTx(tx)) {
+      console.error("Transaction already added: ", tx)
       return
     }
     if (this.wallet.tryDecryptTransaction(tx)) {
@@ -109,13 +185,13 @@ class TXHandler {
       if (this.decryptHandler) {
         this.decryptHandler(tx)
       }
-      console.log("TX Decrypted: ", tx)
+      console.log("Transaction Decrypted: ", tx)
     }
     tx.id = tx.id || hash(tx.dest)
     this.txs[tx.id] = tx
   }
   
-  hastx(tx) {
+  hasTx(tx) {
     return this.txs[tx.id || (tx.id = hash(tx.dest))]
   }
   
@@ -165,7 +241,7 @@ class TXHandler {
       minerFee
     ]
     const outputHash = hash(...outputInfo)
-    console.log("Formatted outputs: ", wallet.formatArguments(...outputInfo))
+    // Formatted FullTx: wallet.formatArguments(...outputInfo)
     let blindingSum = outs.reduce((a, b) => a.plus(b.senderData.blindingKey), bigInt[0])
     const ringProofs = []
     for (const [i, fund] of funds.entries()) {
@@ -177,7 +253,6 @@ class TXHandler {
         blindingKey = bigInt.randBetween(0, bigInt[2].pow(256)).mod(pt.q)
         blindingSum = blindingSum.minus(blindingKey)
       }
-      console.log(fund, mixers, outputHash, blindingKey)
       ringProofs.push(this.wallet.createRingProof(fund, mixers, outputHash, blindingKey))
     }
     const fullTX = {

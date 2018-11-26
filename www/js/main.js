@@ -60,7 +60,6 @@ window.addEventListener('load', async () => {
       const form = e.target
       const pubKey = form.elements.to.value
       const amount = form.elements.amount.value
-      console.log(pubKey, amount)
       result.innerHTML = JSON.stringify(handler.createFullTx(parser.parseJSONKey(JSON.parse(pubKey)), amount, 3))
     }
     

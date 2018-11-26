@@ -473,7 +473,7 @@ contract MonereumBlockchain is MonereumMemory {
     // outputIDs = [hash(outputDest_0), ..., hash(outputDest_{M-1}), hash(minerDest)] <- All verified don't exist yet. All now set to Pending
     // ringGroupHash = hash(outputIDs, ringHashes)
     // ringGroupTimes[ringGroupHash] = 2^250
-    // Verified rangeProofHashes_i < rangeProofHashes_{i+1} for each i, for uniqueness
+    // Verified: rangeProofHashes are unique
     // rangeProofCommitment[ringGroupHash][rangeProofHashes_i] = hash(ringProof_i.commitment) for all i
     // rangeProofsRemaining[ringGroupHash] = M
     // ethBalances[msg.sender] -= goodRingBountyAmount (Overflow checked)
