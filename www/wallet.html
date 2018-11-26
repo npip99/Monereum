@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<head>
+  <title>Monereum</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <img src="images/logo.svg" width="65" height="65" alt="">
+      <h1>
+        Monereum
+      </h1>
+    </div>
+    <nav>
+      <ul>
+        <li>Market</li>
+        <li>Transactions</li>
+        <li>Wallet</li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <div id="wallet">
+        <p id="log"></p>
+        <textarea id="result" name="result" rows="8" cols="80">
+        </textarea>
+        <h1>Wallet</h1>
+        <form onsubmit="getPublicKey(event)">
+          <h2>Get Public Key</h2>
+          <input type="submit" name="submit">
+        </form>
+        <form onsubmit="createTx(event)">
+          <h2>Create Transaction</h2>
+          Amount:
+          <br/>
+          <input type="text" name="amount" autocomplete="off"/>
+          <br/>
+          <input type="submit" name="submit">
+        </form>
+        <form onsubmit="createFullTx(event)">
+          <h2>Create Full Transaction</h2>
+          To:
+          <br/>
+          <textarea name="to" rows="8" cols="80">
+          </textarea>
+          <br/>
+          Amount:
+          <br/>
+          <input type="text" name="amount"/>
+          <br/>
+          <input type="submit" name="submit">
+        </form>
+        <h1>Miner</h1>
+        <form onsubmit="mintTx(event)">
+          <h2>Mint</h2>
+          <textarea name="tx" rows="8" cols="80">
+          </textarea>
+          <br/>
+          <input type="submit" name="submit">
+          <br/>
+        </form>
+        <form onsubmit="submitFullTx(event)">
+          <h2>Submit</h2>
+          <textarea name="fullTx" rows="8" cols="80">
+          </textarea>
+          <br/>
+          <input type="submit" name="submit">
+          <br/>
+        </form>
+      </div>
+    </section>
+    <footer>
+      <small>
+        Nicholas Pipitone &copy; Copyright 2018.
+      </small>
+    </footer>
+  </main>
+  <script src="js/static/bundle.js"></script>
+</body>

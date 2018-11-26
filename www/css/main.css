@@ -152,7 +152,10 @@ header nav li {
   font-size: 2.75em;
 }
 
-#market {
+#market, #wallet {
   margin: 4em 4em 1em 1em;
+}
+
+#market {
   height: 100vh;
 }
