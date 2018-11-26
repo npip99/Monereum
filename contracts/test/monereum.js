@@ -9,12 +9,12 @@ var Verifier = artifacts.require("./MonereumVerifier.sol");
 contract('Monereum', function(accounts) {
   it("should put 10000 MetaCoin in the first account", function() {
     return Verifier.deployed().then(function(instance) {
-      console.log("H")
+      console.log("Verifier Deployed")
       return instance.initializeH().then(function() {
-        console.log("HERE")
+        console.log("H Initialized")
 				return instance.initializeHashVals(0, 35).then(function() {
 					return instance.getHashVal(127).then(function(val) {
-					  console.log("VAL: ", val)
+					  console.log("HashVal[127]: ", val)
             return instance
 					})
 				})
