@@ -1,13 +1,11 @@
-pragma solidity 0.4.25;
-
 import "./MonereumMath.sol";
-import "./MonereumConstants.sol";
 
-contract MonereumMemory is MonereumConstants, MonereumMath {
+contract MonereumMemory is MonereumMath {
     // === Internal Memory ===
 
     // Blockchain state
-    mapping(uint256 => Transaction) transactions;
+    mapping(uint256 => uint256) transactions;
+    mapping(uint256 => Status) statusData;
     mapping(uint256 => bool) usedImages;
 
     // Ethereum balances
@@ -17,9 +15,7 @@ contract MonereumMemory is MonereumConstants, MonereumMath {
     mapping(uint256 => uint256[2]) minerFeeH;
 
     // Ring group data
-    mapping(uint256 => uint256) ringGroupTimes;
-    mapping(uint256 => uint256) rangeProofsRemaining;
-    mapping(uint256 => mapping(uint256 => uint256)) rangeProofCommitment;
+    mapping(uint256 => uint256) ringGroupData;
     mapping(uint256 => address) goodRingGroupBountyHolders;
     // Dispute Topic can be any ring, or any range proof
     mapping(uint256 => address) badDisputeTopicBountyHolders;
@@ -44,11 +40,6 @@ contract MonereumMemory is MonereumConstants, MonereumMath {
         Unknown,
         Rejected,
         Accepted
-    }
-
-    struct Transaction {
-        uint256 commitment;
-        Status status;
     }
 
     struct RangeProof {

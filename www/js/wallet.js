@@ -267,15 +267,16 @@ class Wallet {
 			rangeCommitments.push(commitment)
 			rangeBorromeans.push(borromean)
 			rangeProofs.push(proof)
-			indices.push(i)
+			indices.push(bigInt[i])
 		}
-    return {
+    const ret = {
 				commitment: tx.commitment,
 				rangeCommitments,
 				rangeBorromeans,
 				rangeProofs,
 				indices
 		}
+    return ret
   }
   
   verifyRangeProof(rangeProof) {
@@ -286,9 +287,10 @@ class Wallet {
       let check = rangeCommitments[i].times(borromean).plus(pt.g.times(rangeProofs[i][0])).affine()
       let prevHash = hash(check)
       let index = indices[i]
-      if (index >= 64) {
+      if (index.geq(64)) {
         return false
       }
+      index = index.toJSNumber()
       if (i > 0 && indices[i - 1] >= index) {
         return false
       }

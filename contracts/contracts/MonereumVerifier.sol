@@ -1,9 +1,8 @@
 pragma solidity 0.4.25;
 
 import "./MonereumMath.sol";
-import "./MonereumConstants.sol";
 
-contract MonereumVerifier is MonereumMath, MonereumConstants {
+contract MonereumVerifier is MonereumMath {
     constructor(address MI) MonereumMath(MI) public {
     }
     

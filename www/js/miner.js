@@ -32,7 +32,7 @@ class Miner {
       const {ringGroupHash, outputIDs, ringHashes} = parser.parseRingGroup(parser.initParser(result.data))
       const ringGroupData = this.pending[ringGroupHash]
       if (ringGroupData) {
-        console.log("RingGroup of Range Proof recognized: ", ringGroupHash)
+        console.log("RingGroup of RangeProof recognized: ", ringGroupHash.toString())
         const rangeProofs = ringGroupData.rangeProofs
         this.rangeProofsRemaining[ringGroupHash] = rangeProofs.length
         const func = hash.padItem(hash.funcHash("logRangeProof(uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")).slice(0, 4*2)
@@ -44,7 +44,7 @@ class Miner {
             gasPrice: 5e9,
           }, (error, hash) => {
             if (error) {
-              console.error("Range Proof Failed")
+              console.error("RangeProof Failed")
             }
           })
         })
@@ -65,7 +65,7 @@ class Miner {
       this.watched[result.transactionHash] = true
       const rangeProof = parser.parseRangeProof(parser.initParser(result.data))
       if (this.rangeProofsRemaining[rangeProof.ringGroupHash]) {
-        console.log("Range Proof of ", rangeProof.ringGroupHash, " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
+        console.log("RangeProof of ", rangeProof.ringGroupHash.toString(), " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
         if((--this.rangeProofsRemaining[rangeProof.ringGroupHash]) == 0) {
           setTimeout(() => {
             const {outputIDs, ringHashes} = this.pending[rangeProof.ringGroupHash]
@@ -99,7 +99,9 @@ class Miner {
         gasPrice: 5e9,
     }, (error, hash) => {
       if (error) {
-        console.error("Mint failed")
+        console.error("Mint failed: ", error)
+      } else {
+        console.log("Mint succeeded: ", hash)
       }
     })
   }
@@ -121,6 +123,7 @@ class Miner {
         console.error("Submit Failed")
       } else {
         this.pending[ringGroupHash] = {rangeProofs, ringHashes, outputIDs}
+        console.log("Submit Succeeded: ", hash)
       }
     })
   }

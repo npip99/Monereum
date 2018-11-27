@@ -3,6 +3,14 @@ const pt = require('./ecc-point')
 const constants = require('./constants')
 
 class Parser {
+  static parseJSONBigInt(num) {
+    const ret = bigInt(num);
+    if (ret.lt(0)) {
+      throw "Negative value found";
+    }
+    return ret
+  }
+  
   static parseJSONKey(key) {
     return {
       spendPub: Parser.parseJSONPt(key.spendPub),
@@ -11,7 +19,8 @@ class Parser {
   }
 
   static parseJSONPt(p) {
-    return new pt(p.x, p.y)
+    const parseBigInt = Parser.parseJSONBigInt
+    return new pt(parseBigInt(p.x), parseBigInt(p.y))
   }
 
   static parseJSONTx(tx) {
@@ -28,14 +37,14 @@ class Parser {
   static parseJSONFullTx(tx) {
     const parsePt = Parser.parseJSONPt
     const parseTx = Parser.parseJSONTx
-    const parseBigInt = b => bigInt(b)
+    const parseBigInt = Parser.parseJSONBigInt
     tx.rangeProofs = tx.rangeProofs.map(rp => {
       return {
         commitment: parsePt(rp.commitment),
         rangeCommitments: rp.rangeCommitments.map(parsePt),
         rangeBorromeans: rp.rangeBorromeans.map(parseBigInt),
-        rangeProofs: rp.rangeProofs.map(a => [bigInt(a[0]), bigInt(a[1])]),
-        indices: rp.indices,
+        rangeProofs: rp.rangeProofs.map(pf => [parseBigInt(pf[0]), parseBigInt(pf[1])]),
+        indices: rp.indices.map(parseBigInt),
       }
     })
     tx.ringProofs = tx.ringProofs.map(rp => {
@@ -164,6 +173,7 @@ class Parser {
       rangeProof.static = true
       rangeProofs.push(rangeProof)
     }
+    Parser.parseNum(parser)
     const indices = []
     for (let i = 0; i < numBits; i++) {
       indices.push(Parser.parseNum(parser))

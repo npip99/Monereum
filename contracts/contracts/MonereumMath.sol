@@ -1,15 +1,12 @@
 pragma solidity 0.4.25;
 
 import "./MonereumInitializer.sol";
+import "./MonereumConstants.sol";
 
-contract MonereumMath {
+contract MonereumMath is MonereumConstants {
     // ECC Under y^2 = x^3 + 3 mod p
     // It can be computed that the order of (1, 2) is q
     // Note that both p and q are prime
-    uint256 public constant p = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
-    uint256 public constant q = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
-    uint256 public constant signBit = uint256(1) << 255;
-    uint256[2] g = [uint256(1), uint256(2)];
     uint256[2] h;
 
     MonereumInitializer mi;

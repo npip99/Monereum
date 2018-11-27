@@ -62,6 +62,38 @@ contract MonereumBlockchain is MonereumMemory {
     constructor(address MI, address MV) MonereumMath(MI) public {
         mv = MonereumVerifier(MV);
     }
+    
+    function getStatus(uint256 transactionID) public constant returns (Status) {
+        uint256 txData = transactions[transactionID];
+        if (txData == 0) {
+            return Status.NonExistant;
+        }
+        Status txStatus = statusData[transactionID];
+        if (txStatus == Status.NonExistant) {
+            if ((txData & statusBit) != 0) {
+                return Status.Accepted;
+            } else {
+                return Status.Pending;
+            }
+        } else {
+            return txStatus;
+        }
+    }
+    
+    function getRingGroupInfo(uint256 ringGroup) internal constant returns (uint256, uint256, uint256) {
+        uint256 compactRingGroupData = ringGroupData[ringGroup];
+        uint256 rangeCommitmentCheck = (compactRingGroupData >> rangeCommitmentCheckBitLocation) & rangeCommitmentCheckBitMask;
+        uint256 rangeProofsRemaining = (compactRingGroupData >> rangeProofsRemainingBitLocation) & rangeProofsRemainingBitMask;
+        uint256 time = (compactRingGroupData >> timeBitLocation) & timeBitMask;
+        return (rangeCommitmentCheck, rangeProofsRemaining, time);
+    }
+    
+    function setRingGroupInfo(uint256 ringGroup, uint256 rangeCommitmentCheck, uint256 rangeProofsRemaining, uint256 time) internal {
+        ringGroupData[ringGroup] =
+            (time << timeBitLocation) |
+            (rangeProofsRemaining << rangeProofsRemainingBitLocation) | 
+            (rangeCommitmentCheck << rangeCommitmentCheckBitLocation); 
+    }
 
     function mint(
         uint256[2] src,
@@ -71,10 +103,9 @@ contract MonereumBlockchain is MonereumMemory {
         require(eccvalid(dest), "Dest is not on curve");
         require(isInf(src) || eccvalid(src), "Src is not on curve");
         uint256 transactionID = hashP(dest);
-        require(transactions[transactionID].status == Status.NonExistant, "Transaction already exists");
+        require(getStatus(transactionID) == Status.NonExistant, "Transaction already exists");
         uint256[2] memory commitment = ecmul(h, amount);
-        transactions[transactionID].commitment = compress(commitment);
-        transactions[transactionID].status = Status.Accepted;
+        transactions[transactionID] = compress(commitment) | statusBit;
         emit LogTransaction(
             transactionID,
             src,
@@ -103,8 +134,8 @@ contract MonereumBlockchain is MonereumMemory {
     }
     
     function isValidRingGroup(uint256 ringGroupHash) public constant returns (bool) {
-        uint256 ringGroupTime = ringGroupTimes[ringGroupHash];
-        return ringGroupTime != 0 && ringGroupTime != frozenTime;
+        (, uint256 ringGroupTime) = getRingGroupInfo(ringGroupHash);
+        return ringGroupTime != 0;
     }
 
     function disputeRingGroup(
@@ -113,9 +144,9 @@ contract MonereumBlockchain is MonereumMemory {
         uint256[] outputIDs
     ) internal {
         require(isValidRingGroup(ringGroupHash), "ringGroup does not exist");
-        require(transactions[outputIDs[0]].status == Status.Pending, "Transaction is not pending");
+        require(getStatus(outputIDs[0]) == Status.Pending, "Transaction is not pending");
         for (uint256 i = 0; i < outputIDs.length; i++) {
-            transactions[outputIDs[i]].status = Status.Disputed;
+            statusData[outputIDs[i]] = Status.Disputed;
         }
         address sender = msg.sender;
         require(ethBalances[sender] >= badRingBountyAmount, "cannot afford bounty");
@@ -130,18 +161,20 @@ contract MonereumBlockchain is MonereumMemory {
         ProofStatus disputedProofStatus
     ) internal {
         require(isValidRingGroup(ringGroupHash), "ringGroup does not exist");
+        (uint256 a, uint256 b,) = getRingGroupInfo(ringGroupHash);
         if (disputedProofStatus == ProofStatus.Accepted) {
             for(uint256 i = 0; i < outputIDs.length; i++) {
-               transactions[outputIDs[i]].status = Status.Pending;
+                // Resets to Pending
+               statusData[outputIDs[i]] = Status.NonExistant;
             }
-            ringGroupTimes[ringGroupHash] = block.timestamp + disputeTime;
+            setRingGroupInfo(ringGroupHash, a, b, block.timestamp + disputeTime);
             ethBalances[msg.sender] += goodRingBountyAward;
         } else if (disputedProofStatus == ProofStatus.Rejected) {
             for(i = 0; i < outputIDs.length; i++) {
-               transactions[outputIDs[i]].status = Status.Rejected;
+               statusData[outputIDs[i]] = Status.Rejected;
             }
             ethBalances[badRingBountyHolder] += badRingBountyAward;
-            ringGroupTimes[ringGroupHash] = 0;
+            setRingGroupInfo(ringGroupHash, a, b, 0);
         } else {
             require(false, "Proof status is still unknown");
         }
@@ -247,11 +280,12 @@ contract MonereumBlockchain is MonereumMemory {
             ringHashes
         )));
         require(isValidRingGroup(ringGroupHash), "ringGroup does not exist");
-        uint256 ringGroupTime = ringGroupTimes[ringGroupHash];
+        (, uint256 ringGroupTime) = getRingGroupInfo(ringGroupHash);
         require(ringGroupTime <= block.timestamp, "Not enough time has passed");
-        require(transactions[outputIDs[0]].status == Status.Pending, "Transaction is not pending");
+        require(getStatus(outputIDs[0]) == Status.Pending, "Transaction is not pending");
         for (uint256 i = 0; i < outputIDs.length; i++) {
-            transactions[outputIDs[i]].status = Status.Accepted;
+            // Set to accepting
+            transactions[outputIDs[i]] |= statusBit;
         }
         if (ringGroupTime + disputeTime <= block.timestamp) {
             ethBalances[msg.sender] += goodRingBountyAmount;
@@ -263,7 +297,7 @@ contract MonereumBlockchain is MonereumMemory {
 
         // Claim gas
         goodRingGroupBountyHolders[ringGroupHash] = 0;
-        ringGroupTimes[ringGroupHash] = 0;
+        setRingGroupInfo(ringGroupHash, 0, 0, 0);
     }
 
     function isInSet(uint256 val, uint256[] set) internal pure returns (bool) {
@@ -341,12 +375,13 @@ contract MonereumBlockchain is MonereumMemory {
         )));
         for (uint256 i = 0; i < MIXIN; i++) {
             // Sqrt exists since transactions are validated
-            uint256 commitmentX = transactions[hashP(funds[i])].commitment;
-            uint256 ySign = (commitmentX & signBit) >> 255;
+            uint256 commitmentX = transactions[hashP(funds[i])];
+            commitmentX &= ~statusBit;
+            uint256 ySign = commitmentX >> signBitLocation;
             commitmentX &= ~signBit;
-            require((commitments[i][1] & 1) != ySign, "Wrong square root for y");
+            require((commitments[i][1] & 1) == ySign, "Wrong square root for y");
             require(commitments[i][0] == commitmentX, "Wrong commitment value");
-            require(isInf(commitments[i]) || eccvalid(commitments[i]), "commitment is not on curve");
+            require(eccvalid(commitments[i]), "commitment is not on curve");
         }
         bool isValid = mv.verifyRingProof(
             funds,
@@ -388,7 +423,9 @@ contract MonereumBlockchain is MonereumMemory {
             outputIDs,
             ringHashes
         )));
-        require(ringGroupTimes[ringGroupHash] == frozenTime, "ringGroup does not exist");
+        (uint256 rangeCommitmentCheck, uint256 rangeProofsRemaining, uint256 time) = getRingGroupInfo(ringGroupHash);
+        require(rangeProofsRemaining > 0, "Not enough range proofs remaining");
+        require(msg.sender == goodRingGroupBountyHolders[ringGroupHash], "Wrong submitter");
         uint256 bits = indices.length;
         require(rangeCommitments.length == bits);
         require(rangeBorromeans.length == bits);
@@ -411,11 +448,16 @@ contract MonereumBlockchain is MonereumMemory {
             rangeProofs,
             indices
         );
-        require(rangeProofCommitment[ringGroupHash][rangeProofHash] == hashP(commitment));
-        rangeProofCommitment[ringGroupHash][rangeProofHash] = 0;
-        rangeProofsRemaining[ringGroupHash]--;
-        if (rangeProofsRemaining[ringGroupHash] == 0) {
-            ringGroupTimes[ringGroupHash] = block.timestamp + disputeTime;
+        rangeCommitmentCheck = (rangeCommitmentCheck ^ hashP(commitment)) & rangeCommitmentCheckBitMask;
+        rangeProofsRemaining--;
+        if (rangeProofsRemaining == 0) {
+            if (rangeCommitmentCheck == 0) {
+                setRingGroupInfo(ringGroupHash, 0, 0, block.timestamp + disputeTime);
+            } else {
+                require(false, "Ring Commitments did not line up");
+            }
+        } else {
+            setRingGroupInfo(ringGroupHash, rangeCommitmentCheck, rangeProofsRemaining, 0);
         }
     }
 
@@ -444,6 +486,7 @@ contract MonereumBlockchain is MonereumMemory {
         uint256 ringGroupHash;
         uint256 outputID;
         address sender;
+        uint256 rangeProofCommitmentCheck;
         uint256[] ringHashes;
         uint256[] outputIDs;
     }
@@ -531,7 +574,7 @@ contract MonereumBlockchain is MonereumMemory {
             require(!usedImages[hashP(v.keyImage)], "keyImage is already used");
             for ( v.i = 0; v.i < MIXIN; v.i++ ) {
                 v.transactionID = hashP(funds[v.ring][v.i]);
-                require(transactions[v.transactionID].status == Status.Accepted, "Transaction has not been accepted yet");
+                require(getStatus(v.transactionID) == Status.Accepted, "Transaction has not been accepted yet");
             }
             v.ringHash = uint256(keccak256(abi.encode(
                 funds[v.ring],
@@ -552,7 +595,7 @@ contract MonereumBlockchain is MonereumMemory {
                 commitmentProofs[v.ring],
                 v.outputHash
             );
-            require(isInf(commitment[v.ring]) || eccvalid(commitment[v.ring]), "Input commitments must be on curve");
+            require(eccvalid(commitment[v.ring]), "Input commitments must be on curve");
             v.commitmentSum = ecadd(v.commitmentSum, commitment[v.ring]);
             v.ringHashes[v.ring] = v.ringHash;
             usedImages[hashP(v.keyImage)] = true;
@@ -570,19 +613,18 @@ contract MonereumBlockchain is MonereumMemory {
             v.outputIDs,
             v.ringHashes
         )));
-        ringGroupTimes[v.ringGroupHash] = frozenTime;
         emit LogRingGroup(
             v.ringGroupHash,
             v.outputIDs,
             v.ringHashes
         );
-
+        
+        v.rangeProofCommitmentCheck = 0;
         require(rangeProofHashes.length == v.numOutputs);
         for( v.i = 0; v.i < v.numOutputs; v.i++ ) {
             v.outputID = v.outputIDs[v.i];
-            require(transactions[v.outputID].status == Status.NonExistant, "Output transaction already exists");
-            transactions[v.outputID].commitment = compress(outputCommitments[v.i]);
-            transactions[v.outputID].status = Status.Pending;
+            require(getStatus(v.outputID) == Status.NonExistant, "Output transaction already exists");
+            transactions[v.outputID] = compress(outputCommitments[v.i]);
             emit LogTransaction(
                 v.outputID,
                 outputSrcs[v.i],
@@ -591,11 +633,12 @@ contract MonereumBlockchain is MonereumMemory {
                 commitmentAmounts[v.i]
             );
             require(commitmentAmounts[v.i] < q, "commitmentAmount is not in Q");
-            require(rangeProofCommitment[v.ringGroupHash][rangeProofHashes[v.i]] == 0, "rangeHash was given twice");
-            rangeProofCommitment[v.ringGroupHash][rangeProofHashes[v.i]] = hashP(outputCommitments[v.i]);
-            require(isInf(outputCommitments[v.i]) || eccvalid(outputCommitments[v.i]), "Commitment sum failed; not all output commitments are on curve");
+            v.rangeProofCommitmentCheck ^= hashP(outputCommitments[v.i]);
+            require(eccvalid(outputCommitments[v.i]), "Commitment sum failed; not all output commitments are on curve");
             v.commitmentSum = ecadd(v.commitmentSum, [outputCommitments[v.i][0], p - outputCommitments[v.i][1]]);
         }
+        v.rangeProofCommitmentCheck &= rangeCommitmentCheckBitMask;
+        setRingGroupInfo(v.ringGroupHash, v.rangeProofCommitmentCheck, v.numOutputs, 0);
 
         if (minerFee == 0) {
             v.minerFeeCommitment = [uint256(0), uint256(0)];
@@ -607,9 +650,8 @@ contract MonereumBlockchain is MonereumMemory {
         require(v.commitmentSum[1] == v.minerFeeCommitment[1], "Commitment sum failed; Does not sum to zero");
 
         v.outputID = v.outputIDs[v.numOutputs];
-        require(transactions[v.outputID].status == Status.NonExistant, "Miner transaction already exists");
-        transactions[v.outputID].commitment = compress(v.minerFeeCommitment);
-        transactions[v.outputID].status = Status.Pending;
+        require(getStatus(v.outputID) == Status.NonExistant, "Miner transaction already exists");
+        transactions[v.outputID] = compress(v.minerFeeCommitment);
         emit LogTransaction(
             v.outputID,
             [uint256(0), uint256(0)],
@@ -618,11 +660,10 @@ contract MonereumBlockchain is MonereumMemory {
             minerFee
         );
 
-        rangeProofsRemaining[v.ringGroupHash] = v.numOutputs;
-
         v.sender = msg.sender;
         require(ethBalances[v.sender] >= goodRingBountyAmount, "Not enough funds for bounty");
         ethBalances[v.sender] -= goodRingBountyAmount;
+        goodRingGroupBountyHolders[v.ringGroupHash] = v.sender; 
     }
 
     event LogTransaction(
