@@ -18,33 +18,6 @@ tx:
 */
 
 class Wallet {
-  addSentTransaction(tx) {
-    this.sent.push(tx)
-  }
-
-  addReceivedTransaction(tx) {
-    this.funds.push(tx);
-  }
-  
-  collectAmount(goalAmount) {
-    let amount = bigInt[0]
-    const funds = []
-    for(const fund of this.funds) {
-      funds.push(fund)
-      amount = amount.plus(fund.receiverData.amount)
-      if (amount.geq(goalAmount)) {
-        break
-      }
-    }
-    if (amount.lt(goalAmount)) {
-      return null
-    }
-    return {
-      funds,
-      amount
-    }
-  }
-  
   getRandom() {
     this.seed = hash(this.seed.xor(this.masterKey))
     return this.seed
@@ -135,7 +108,7 @@ class Wallet {
 
   isValidReceipt(tx, receipt) {
     if (!tx.receiverData) {
-      return null;
+      throw "Can't check receipt for unowned Tx"
     }
     return hash(tx.receiverData.secret.plus(1)).eq(receipt);
   }
@@ -153,8 +126,8 @@ class Wallet {
   createRingProof(from, mixers, outputHash, newBlindingKey) {
     const getRandom = this.getRandom.bind(this)
     const index = getRandom().mod(mixers.length + 1).toJSNumber()
-    mixers.splice(index, 0, from)
     const ringFunds = mixers
+    ringFunds.splice(index, 0, from)
     const keyImage = from.dest.hashInP().times(from.receiverData.privKey).affine()
     const commitment = pt.g.times(newBlindingKey).plus(pt.h.times(from.receiverData.amount)).affine()
     const a = getRandom().mod(pt.q)

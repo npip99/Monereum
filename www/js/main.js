@@ -37,7 +37,7 @@ window.addEventListener('load', async () => {
     m = new miner(new wallet("miner" + salt), window.web3)
     owner = new wallet("Bob" + salt);
     handler = new txhandler(owner, window.web3)
-    handler.sync()
+    handler.sync(4514788)
     handler.addDecryptHandler(tx => {
       log.innerHTML += JSON.stringify(tx)
     })

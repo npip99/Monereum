@@ -32,7 +32,7 @@ class Miner {
       const {ringGroupHash, outputIDs, ringHashes} = parser.parseRingGroup(parser.initParser(result.data))
       const ringGroupData = this.pending[ringGroupHash]
       if (ringGroupData) {
-        console.log("RingGroup of RangeProof recognized: ", ringGroupHash.toString())
+        console.log("Ring Group of Range Proof recognized: ", ringGroupHash.toString())
         const rangeProofs = ringGroupData.rangeProofs
         this.rangeProofsRemaining[ringGroupHash] = rangeProofs.length
         const func = hash.padItem(hash.funcHash("logRangeProof(uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")).slice(0, 4*2)
@@ -44,7 +44,7 @@ class Miner {
             gasPrice: 5e9,
           }, (error, hash) => {
             if (error) {
-              console.error("RangeProof Failed")
+              console.error("Range Proof Failed")
             }
           })
         })
@@ -65,7 +65,7 @@ class Miner {
       this.watched[result.transactionHash] = true
       const rangeProof = parser.parseRangeProof(parser.initParser(result.data))
       if (this.rangeProofsRemaining[rangeProof.ringGroupHash]) {
-        console.log("RangeProof of ", rangeProof.ringGroupHash.toString(), " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
+        console.log("Range Proof of ", rangeProof.ringGroupHash.toString(), " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
         if((--this.rangeProofsRemaining[rangeProof.ringGroupHash]) == 0) {
           setTimeout(() => {
             const {outputIDs, ringHashes} = this.pending[rangeProof.ringGroupHash]
@@ -77,7 +77,7 @@ class Miner {
               gasPrice: 5e9,
             }, (error, hash) => {
               if (error) {
-                console.error("Commit Ring Failed")
+                console.error("Ring Commit Failed")
               }
             })
           }, constants.disputeTime*1000)
@@ -109,7 +109,19 @@ class Miner {
   submit(tx) {
     if (!tx) {
       console.log("Tried to submit Non-Existant Tx")
-      return
+      return null
+    }
+    for (const ringProof of tx.ringProofs) {
+      if (!this.wallet.verifyRingProof(ringProof)) {
+        console.log("Invalid Ring Proof")
+        return null
+      }
+    }
+    for (const rangeProof of tx.rangeProofs) {
+      if (!this.wallet.verifyRangeProof(rangeProof)) {
+        console.log("Invalid Range Proof")
+        return null
+      }
     }
     const {ringGroupHash, ringHashes, outputIDs, submit, rangeProofs} = this.formatSubmit(tx)
     const func = hash.padItem(hash.funcHash("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],uint256,uint256[2])".replace(/MIXIN/g, constants.mixin)))
@@ -174,8 +186,8 @@ class Miner {
       ringGroupHash,
       ringHashes,
       outputIDs,
-      submit,
       rangeProofs,
+      submit,
     }
   }
 }

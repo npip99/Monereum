@@ -4,6 +4,9 @@ const constants = require('./constants')
 
 class Parser {
   static parseJSONBigInt(num) {
+    if (num.length > 256) {
+      throw "Number too large";
+    }
     const ret = bigInt(num);
     if (ret.lt(0)) {
       throw "Negative value found";
@@ -74,6 +77,13 @@ class Parser {
     return bigInt(hex, 16)
   }
   
+  static parseCommittedRingGroup(parser) {
+    const c = {
+      ringGroupHash: Parser.parseNum(parser),
+    }
+    return c
+  }
+  
   static parseTransaction(parser) {
     const outputID = Parser.parseNum(parser)
     const outputSrc = Parser.parsePt(parser)
@@ -124,7 +134,7 @@ class Parser {
   
   static parseRingGroup(parser) {
     const ringGroupHash = Parser.parseNum(parser)
-    // Ignore dynamic argument locations
+    // Skip over dynamic argument locations
     Parser.parseNum(parser)
     Parser.parseNum(parser)
     
@@ -149,11 +159,12 @@ class Parser {
   static parseRangeProof(parser) {
     const ringGroupHash = Parser.parseNum(parser)
     const commitment = Parser.parsePt(parser)
-    // Skip over dynamic memory location
+    // Skip over dynamic argument locations
     Parser.parseNum(parser)
     Parser.parseNum(parser)
     Parser.parseNum(parser)
     Parser.parseNum(parser)
+    
     const numBits = Parser.parseNum(parser)
     const rangeCommitments = []
     for (let i = 0; i < numBits; i++) {
