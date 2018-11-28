@@ -24,53 +24,67 @@
   <main>
     <section>
       <div id="wallet">
+        <form onsubmit="changePerson(event)">
+          <h2>Change Person</h2>
+          <input type="text" name="id" autocomplete="off">
+          <br/>
+          Keys:
+          <br/>
+          <input type="text" name="numKeys" autocomplete="off">
+          <br/>
+          <input type="submit" name="submit">
+        </form>
         <h2>Result</h2>
         <p id="log"></p>
         <textarea id="result" name="result" rows="8" cols="80">
         </textarea>
-        <h2>Wallet</h2>
-        <form onsubmit="getPublicKey(event)">
-          <h3>Get Public Key</h3>
-          <input type="submit" name="submit">
-        </form>
-        <form onsubmit="createTx(event)">
-          <h3>Create Transaction</h3>
-          Amount:
-          <br/>
-          <input type="text" name="amount" autocomplete="off"/>
-          <br/>
-          <input type="submit" name="submit">
-        </form>
-        <form onsubmit="createFullTx(event)">
-          <h3>Create Full Transaction</h3>
-          To:
-          <br/>
-          <textarea name="to" rows="8" cols="80">
-          </textarea>
-          <br/>
-          Amount:
-          <br/>
-          <input type="text" name="amount" autocomplete="off"/>
-          <br/>
-          <input type="submit" name="submit">
-        </form>
-        <h2>Miner</h2>
-        <form onsubmit="mintTx(event)">
-          <h3>Mint</h3>
-          <textarea name="tx" rows="8" cols="80">
-          </textarea>
-          <br/>
-          <input type="submit" name="submit">
-          <br/>
-        </form>
-        <form onsubmit="submitFullTx(event)">
-          <h3>Submit</h3>
-          <textarea name="fullTx" rows="8" cols="80">
-          </textarea>
-          <br/>
-          <input type="submit" name="submit">
-          <br/>
-        </form>
+        <div id="wallet_form">
+          <h2>Wallet</h2>
+          <form onsubmit="getPublicKey(event)">
+            <h3>Get Public Key</h3>
+            <input type="submit" name="submit">
+          </form>
+          <form onsubmit="createTx(event)">
+            <h3>Create Transaction</h3>
+            Amount:
+            <br/>
+            <input type="text" name="amount" autocomplete="off"/>
+            <br/>
+            <input type="submit" name="submit">
+          </form>
+          <form onsubmit="createFullTx(event)">
+            <h3>Create Full Transaction</h3>
+            To:
+            <br/>
+            <textarea name="to" rows="8" cols="80">
+            </textarea>
+            <br/>
+            Amount:
+            <br/>
+            <input type="text" name="amount" autocomplete="off"/>
+            <br/>
+            <input type="submit" name="submit">
+          </form>
+        </div>
+        <div id="miner_form">
+          <h2>Miner</h2>
+          <form onsubmit="mintTx(event)">
+            <h3>Mint</h3>
+            <textarea name="tx" rows="8" cols="80">
+            </textarea>
+            <br/>
+            <input type="submit" name="submit">
+            <br/>
+          </form>
+          <form onsubmit="submitFullTx(event)">
+            <h3>Submit</h3>
+            <textarea name="fullTx" rows="8" cols="80">
+            </textarea>
+            <br/>
+            <input type="submit" name="submit">
+            <br/>
+          </form>
+        </div>
       </div>
     </section>
     <footer>

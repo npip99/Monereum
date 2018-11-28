@@ -32,15 +32,45 @@ window.addEventListener('load', async () => {
     
     result = document.getElementById("result")
     log = document.getElementById("log")
+    timer = null
     
-    salt = bigInt.randBetween(0, bigInt[2].pow(256)).toString()
-    m = new miner(new wallet("miner" + salt), window.web3)
-    owner = new wallet("Bob" + salt);
-    handler = new txhandler(owner, window.web3)
-    handler.sync(4514788)
-    handler.addDecryptHandler(tx => {
-      log.innerHTML += JSON.stringify(tx)
-    })
+    m = new miner(new wallet("miner"), window.web3)
+    
+    changePerson = e => {
+      e.preventDefault()
+      const form = e.target
+      const id = parseInt(form.elements.id.value)
+      if (timer) {
+        clearInterval(timer)
+      }
+      if (id === 0) {
+        document.getElementById("miner_form").style = "display: block;"
+        document.getElementById("wallet_form").style = "display: none;"
+      } else {
+        owner = new wallet("Person #" + id)
+        handler = new txhandler(owner, window.web3)
+        handler.addDecryptHandler(tx => {
+          log.innerHTML += JSON.stringify(tx, null, '\t')
+        })
+        const numKeys = parseInt(form.elements.numKeys.value)
+        for (let i = 0; i < numKeys; i++) {
+          handler.getPublicKey()
+        }
+        window.web3.eth.getBlockNumber((error, result) => {
+          handler.sync(result)
+        })
+        timer = setInterval(() => {
+          window.web3.eth.getBlockNumber((error, result) => {
+            if (handler.doneSyncing) {
+              console.log("Syncing to: ", result)
+              handler.sync(result)
+            }
+          })
+        }, 1000)
+        document.getElementById("miner_form").style = "display: none;"
+        document.getElementById("wallet_form").style = "display: block;"
+      }
+    }
     
     getPublicKey = e => {
       e.preventDefault()
@@ -52,7 +82,7 @@ window.addEventListener('load', async () => {
       const form = e.target
       const amount = form.elements.amount.value
       const key = handler.getPublicKey()
-      result.innerHTML = JSON.stringify(txhandler.createMint(key, amount))
+      result.innerHTML = JSON.stringify(handler.createMint(amount))
     }
     
     createFullTx = e => {

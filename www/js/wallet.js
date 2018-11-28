@@ -19,12 +19,12 @@ tx:
 
 class Wallet {
   getRandom() {
-    this.seed = hash(this.seed.xor(this.masterKey))
+    this.seed = hash(this.seed.xor(this.masterSeed))
     return this.seed
   }
 
   generateKey() {
-    this.privSeed = hash(this.privSeed.xor(this.masterKey))
+    this.privSeed = hash(this.privSeed.xor(this.masterSeed))
     
     const spend = this.privSeed.mod(pt.q)
     const view = hash(spend).mod(pt.q)
@@ -39,7 +39,7 @@ class Wallet {
   }
 
   createTransaction(pubKey, amount, noBlindingKey) {
-    this.sentSeed = hash(this.sentSeed.xor(this.masterKey));
+    this.sentSeed = hash(this.sentSeed.xor(this.masterSeed));
     
     const rand = this.sentSeed.mod(pt.q);
 		amount = bigInt(amount)
@@ -316,16 +316,16 @@ class Wallet {
 
   constructor(mnemonic) {
     this.mnemonic = mnemonic
-    this.masterKey = hash(mnemonic)
-    this.seed = hash(bigInt[0].plus(this.masterKey))
+    this.masterSeed = hash(mnemonic)
+    this.seed = hash(bigInt[0].plus(this.masterSeed))
     // Generates private keys deterministically
-    this.privSeed = hash(bigInt[1].plus(this.masterKey))
+    this.privSeed = hash(bigInt[1].plus(this.masterSeed))
     // Generates sending keys deterministically
-    this.sentSeed = hash(bigInt[2].plus(this.masterKey))
+    this.sentSeed = hash(bigInt[2].plus(this.masterSeed))
     this.keys = []
     this.funds = []
     this.sent = []
-    this.changeKey = this.generateKey()
+    this.masterKey = this.generateKey()
   }
   
   saveWallet() {
