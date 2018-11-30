@@ -154,6 +154,7 @@ class TXHandler {
     txData.tx = tx
     this.wallet.tryDecryptTransaction(tx)
     if (tx.receiverData) {
+      console.log("Transaction Decrypted")
       this.keyImages[hash(tx.dest.hashInP().times(tx.receiverData.privKey).affine())] = tx.id
     }
     if (this.minting) {

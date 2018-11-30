@@ -26,9 +26,7 @@ const padItem = i => {
       return padInt(0) + padInt(0)
     } else {
       if (i.z.neq(1)) {
-        console.log(i)
         throw "Point is not in affine coordinates"
-        debugger
       }
       return padInt(i.x) + padInt(i.y);
     }

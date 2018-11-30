@@ -27,14 +27,18 @@ class Wallet {
     this.privSeed = hash(this.privSeed.xor(this.masterSeed))
     
     const spend = this.privSeed.mod(pt.q)
-    const view = hash(spend).mod(pt.q)
+    const spendPub =  pt.g.times(spend).affine()
+    const generator = hash(spendPub).and(bigInt[1].shiftLeft(32).minus(1))
+    const view = this.masterView
     const key = {
-      spendPub: pt.g.times(spend).affine(),
-      viewPub: pt.g.times(view).affine(),
+      spendPub: spendPub,
+      viewPub: pt.g.times(generator).hashInP().times(view).affine(),
+      generator: generator,
       spendKey: spend,
       viewKey: view
     }
     this.keys.push(key)
+    this.spendPubs[spendPub] = key
     return key;
   }
 
@@ -44,7 +48,8 @@ class Wallet {
     const rand = this.sentSeed.mod(pt.q);
 		amount = bigInt(amount)
     const tx = {}
-    tx.src = pt.g.times(rand).affine()
+    const generator = hash(pubKey.spendPub).and(bigInt[1].shiftLeft(32).minus(1))
+    tx.src = pt.g.times(generator).hashInP().times(rand).affine()
     const secret = hash(pubKey.viewPub.times(rand).affine())
     tx.dest = pt.g.times(secret).plus(pubKey.spendPub).affine()
     const blindingKey = noBlindingKey ? 0 : hash(secret)
@@ -68,30 +73,35 @@ class Wallet {
     return tx.src.eq(pt.g.times(rand))
   }
 
-  decryptTransaction(tx, key) {
+  tryDecryptTransaction(tx) {
     if (tx.receiverData) {
+      console.error("Already decrypted")
       return tx;
     }
-    let secret = hash(tx.src.times(key.viewKey).affine());
-    let privKey = null;
-    if (tx.dest.eq(pt.g.times(key.spendKey))) {
-      secret = null;
-      privKey = key.spendKey;
-    } else if (tx.dest.eq(pt.g.times(secret).plus(key.spendPub))) {
-      if (key.spendKey) {
-        privKey = secret.plus(key.spendKey).mod(pt.q)
+    let secret = hash(tx.src.times(this.masterView).affine());
+    const mostMoney = bigInt[1].shiftLeft(64);
+    
+    let blindingKey = hash(secret)
+    let amount = tx.commitmentAmount.minus(hash(blindingKey)).mod(pt.q).plus(pt.q).mod(pt.q)
+    if (tx.commitmentAmount.gt(mostMoney)) {
+      if (amount.gt(mostMoney)) {
+        return null
       }
-    } else {
-      return null;
     }
-    let blindingKey;
-    let amount;
+    
+    let privKey = null;
+    const spendPub = tx.dest.minus(pt.g.times(secret)).affine()
+    const key = this.spendPubs[spendPub]
+    if (!key) {
+      return null
+    }
+    if (key.spendKey) {
+      privKey = secret.plus(key.spendKey).mod(pt.q)
+    }
     if (tx.commitment.eq(pt.h.times(tx.commitmentAmount))) {
       blindingKey = 0
       amount = tx.commitmentAmount
     } else {
-      blindingKey = hash(secret)
-      amount = tx.commitmentAmount.minus(hash(blindingKey)).mod(pt.q).plus(pt.q).mod(pt.q)
       if (tx.commitment.neq(pt.g.times(blindingKey).plus(pt.h.times(amount)))) {
         console.error("Bad TX: ", tx, key);
         return null;
@@ -111,16 +121,6 @@ class Wallet {
       throw "Can't check receipt for unowned Tx"
     }
     return hash(tx.receiverData.secret.plus(1)).eq(receipt);
-  }
-
-  tryDecryptTransaction(tx) {
-    for (const key of this.keys) {
-      const triedTX = this.decryptTransaction(tx, key)
-      if (triedTX) {
-        return triedTX;
-      }
-    }
-    return null;
   }
 
   createRingProof(from, mixers, outputHash, newBlindingKey) {
@@ -325,6 +325,8 @@ class Wallet {
     this.keys = []
     this.funds = []
     this.sent = []
+    this.masterView = hash(this.masterSeed.plus(3)).mod(pt.q)
+    this.spendPubs = {}
     this.masterKey = this.generateKey()
   }
   
