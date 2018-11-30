@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title>JS Bin</title>
+  <script src="http://peterolson.github.com/BigInteger.js/BigInteger.min.js"></script>
+</head>
+<body>
+<script>
+const NativeBigInt = function(val, base) {
+  return new NativeBigIntClass(val, base);
+}
+
+class NativeBigIntClass {
+  constructor(val, base) {
+    if (base === undefined) {
+      this.value = BigInt(val)
+    } else if (base === 16) {
+      this.value = BigInt("0x" + val)
+    } else {
+      throw "Invalid base: " + base
+    }
+  }
+
+  isZero() {
+    return this.value == 0
+  }
+
+  isNegative() {
+    return this.value < 0
+  }
+
+  square() {
+    return NativeBigInt(this.value * this.value)
+  }
+
+  abs() {
+    if (this.value < 0) {
+      return NativeBigInt(-this.value)
+    } else {
+      return this
+    }
+  }
+
+  plus(v) {
+    v = NativeBigInt(v)
+    return NativeBigInt(this.value + v.value)
+  }
+
+  times(v) {
+    v = NativeBigInt(v)
+    return NativeBigInt(this.value * v.value)
+  }
+
+  minus(v) {
+    v = NativeBigInt(v)
+    return NativeBigInt(this.value - v.value)
+  }
+
+  over(v) {
+    v = NativeBigInt(v)
+    return NativeBigInt(this.value / v.value)
+  }
+
+  mod(v) {
+    v = NativeBigInt(v)
+    return NativeBigInt(this.value % v.value)
+  }
+
+  divmod(v) {
+    v = NativeBigInt(v)
+    const div = this.value / v.value
+    const mod = this.value - div * v.value
+    return {
+      quotient: NativeBigInt(div),
+      remainder: NativeBigInt(mod),
+    }
+  }
+
+  shiftLeft(v) {
+    v = NativeBigInt(v)
+    return NativeBigInt(this.value << v.value)
+  }
+
+  shiftRight(v) {
+    v = NativeBigInt(v)
+    return NativeBigInt(this.value >> v.value)
+  }
+
+  lt(v) {
+    v = NativeBigInt(v)
+    return this.value < v.value
+  }
+
+  gt(v) {
+    v = NativeBigInt(v)
+    return this.value > v.value
+  }
+
+  leq(v) {
+    v = NativeBigInt(v)
+    return this.value <= v.value
+  }
+
+  geq(v) {
+    v = NativeBigInt(v)
+    return this.value >= v.value
+  }
+
+  eq(v) {
+    v = NativeBigInt(v)
+    return this.value == v.value
+  }
+
+  neq(v) {
+    return !this.eq(v)
+  }
+
+  xor(v) {
+    v = NativeBigInt(v)
+    return NativeBigInt(this.value ^ v.value)
+  }
+
+  and(v) {
+    v = NativeBigInt(v)
+    return NativeBigInt(this.value & v.value)
+  }
+
+  toArray(base) {
+    const isNegative = this.value < 0
+    const ret = []
+    let v = this.value
+    base = BigInt(base)
+    while (v > 0) {
+      const div = v / base
+      const mod = v - div * base
+      ret.push(Number(mod))
+      v = div
+    }
+    return {
+      isNegative,
+      value: ret.reverse()
+    }
+  }
+
+  pow(v) {
+    v = NativeBigInt(v)
+    return NativeBigInt(this.value ** v.value)
+  }
+
+  modPow(v, p) {
+    v = NativeBigInt(v)
+    p = NativeBigInt(p)
+    const bin = v.toArray(2).value
+
+    let ans = BigInt(1)
+
+    for (let i = 0; i < bin.length; i++) {
+      ans = (ans * ans) % p.value
+      if (bin[i]) {
+        ans = (ans * this.value) % p.value
+      }
+    }
+    return NativeBigInt(ans % p.value)
+  }
+
+  modInv(p) {
+    let t = BigInt(0)
+    let newT = BigInt(1)
+    let r = NativeBigInt(p).value
+    let newR = this.abs().value
+    let q, lastT, lastR
+    while (newR != 0) {
+      q = r / newR;
+      lastT = t;
+      lastR = r;
+      t = newT;
+      r = newR;
+      newT = lastT - (q * newT);
+      newR = lastR - (q * newR);
+    }
+    if (r != 1) throw new Error(this.toString() + " and " + p.toString() + " are not co-prime");
+    if (t < 0) {
+      t = t + p;
+    }
+    if (this.isNegative()) {
+      return NativeBigInt(-t);
+    }
+    return NativeBigInt(t)
+  }
+
+  toString(base) {
+    const a = "a".charCodeAt(0)
+    if (base == 16) {
+      const vals = this.toArray(16).value
+      let ret = ""
+      for (let i of vals) {
+        if (i >= 10) {
+          ret += String.fromCharCode(a + i - 10)
+        } else {
+          ret += i
+        }
+      }
+      return ret
+    } else if( base === undefined) {
+      return "" + this.value
+    } else {
+      throw "Bad base: " + base
+    }
+  }
+
+  toJSON() {
+    return this.toString()
+  }
+}
+
+for(let i = -10; i < 10; i++) {
+  NativeBigInt[i] = NativeBigInt(i)
+}
+
+bigInt = NativeBigInt
+s = performance.now()
+sum = NativeBigInt(5)
+for (let i = 0; i < 10; i++) {
+  sum = sum.times(sum)
+}
+e = performance.now()
+console.log("Native: ", (e - s)/10)
+s = performance.now()
+sum = bigInt(5)
+for (let i = 0; i < 10; i++) {
+  sum = sum.times(sum)
+}
+e = performance.now()
+console.log("bigInt: ", (e - s)/10)
+
+class ECCPoint {
+    static decompress(x, key) {
+        x = bigInt(x)
+        let p = ECCPoint.p
+        const badPoint = new ECCPoint(p, p)
+        if (x >= p) {
+            return badPoint
+        } else {
+            const goal = x.times(x).times(x).plus(3).mod(p)
+            let y = goal.modPow(p.plus(1).over(4), p)
+            if (y.times(y).mod(p).neq(goal)) {
+                return badPoint
+            }
+            if (y.isEven() && key === 2 || y.isOdd() && key === 3) {
+                y = p.minus(y).mod(p)
+            }
+            return new ECCPoint(x, y)
+        }
+    }
+
+    static findNextY(x) {
+      x = bigInt(x)
+      let p = ECCPoint.p
+      while (true) {
+        const goal = x.square().times(x).plus(3).mod(p)
+        const y = goal.modPow(p.plus(1).over(4), p)
+        if (y.square().mod(p).neq(goal)) {
+            x = x.plus(1)
+            continue;
+        }
+        return new ECCPoint(x, y)
+      }
+    }
+
+    constructor(x, y, z) {
+        this.x = bigInt(x);
+        this.y = bigInt(y);
+        if (z === undefined) {
+          this.z = bigInt[1];
+        } else {
+          this.z = bigInt(z);
+        }
+        if (this.x.isZero() && this.y.isZero()) {
+          this.z = bigInt[0]
+        }
+    }
+
+    hashInP() {
+      if (this.hashedInP) {
+        return this.hashedInP
+      }
+      this.affine()
+      const pHash = hash(this).toArray(2).value.reverse()
+      let hashGenerator = ECCPoint.zero
+      for (let i = 0; i < 128; i++) {
+        if (pHash[i] === 1) {
+          hashGenerator = hashGenerator.plus(ECCPoint.hashSet[i])
+        }
+      }
+      return this.hashedInP = hashGenerator
+    }
+
+    eq(pt) {
+        if (this.isInf()) {
+          return pt.isInf()
+        }
+        if (pt.isInf()) {
+          return this.isInf()
+        }
+        const p = ECCPoint.p
+        const z12 = this.z.square()
+        const z13 = z12.times(this.z)
+        const z22 = pt.z.square()
+        const z23 = z22.times(pt.z)
+        return this.x.times(z22).minus(pt.x.times(z12)).mod(p).eq(0)
+            && this.y.times(z23).minus(pt.y.times(z13)).mod(p).eq(0);
+    }
+
+    neq(pt) {
+        return !this.eq(pt);
+    }
+
+    isInf() {
+        return this.z.isZero();
+    }
+
+    isInP() {
+        return this.x.lt(ECCPoint.p) && this.y.lt(ECCPoint.p);
+    }
+
+    isOnCurve() {
+        if (this.isInf()) {
+          return false
+        }
+        const p = ECCPoint.p
+        const x = this.x
+        const y = this.y
+        const zz = this.zz || (this.zz = this.z.square())
+        const z6 = zz.square().times(zz)
+        return y.square().minus(x.square().times(x).plus(z6.times(3))).mod(p).eq(bigInt[0]);
+    }
+
+    isValid() {
+        return this.isInP() && (this.isInf() || this.isOnCurve());
+    }
+
+    minus(pt) {
+        if (pt.isInf()) {
+          return this
+        }
+        return this.plus(new ECCPoint(pt.x, bigInt[0].minus(pt.y), pt.z));
+    }
+
+    // 0.1 ms
+    plus(pt) {
+        if (this.isInf()) {
+          return pt
+        }
+        if (pt.isInf()) {
+          return this
+        }
+        const p = ECCPoint.p
+        const z1z1 = this.z.square().mod(p)
+        const z2z2 = pt.z.square().mod(p)
+        const u1 = this.x.times(z2z2).mod(p)
+        const u2 = pt.x.times(z1z1).mod(p)
+        const s1 = this.y.times(z2z2).times(pt.z).mod(p)
+        const s2 = pt.y.times(z1z1).times(this.z).mod(p)
+        if (u1.eq(u2)) {
+          if (s1.eq(s2)) {
+            return this.double()
+          } else {
+            return ECCPoint.zero
+          }
+        }
+        const h = u2.minus(u1)
+        const i = h.plus(h).square()
+        const j = h.times(i)
+        const r = s2.minus(s1).shiftLeft(1)
+        const v = u1.times(i)
+        const x3 = r.square().minus(j).minus(v.shiftLeft(1)).mod(p)
+        const y3 = r.times(v.minus(x3)).minus(s1.times(j).shiftLeft(1)).mod(p)
+        const z3 = this.z.plus(pt.z).square().minus(z1z1).minus(z2z2).times(h).mod(p)
+        return new ECCPoint(x3, y3, z3);
+    }
+
+    // 0.08 ms
+    double() {
+      if (this.dub) {
+        return this.dub
+      }
+      if (this.isInf()) {
+        return this.dub = ECCPoint.zero
+      }
+      const p = ECCPoint.p
+      const x2 = this.x.square()
+      const y2 = this.y.square()
+      const y4 = y2.square()
+      const z2 = this.z.square()
+      const s = this.x.plus(y2).square().minus(x2).minus(y4).shiftLeft(1)
+      const m = x2.times(3)
+      const x = m.square().minus(s.shiftLeft(1)).mod(p)
+      const y = m.times(s.minus(x)).minus(y2.square().shiftLeft(3)).mod(p)
+      const z = this.y.plus(this.z).square().minus(y2).minus(z2).mod(p)
+      this.dub = new ECCPoint(x, y, z);
+			if (this.useSave) {
+				this.dub.affine()
+			}
+      return this.dub;
+    }
+
+    // 30ms first time, 13ms all other times
+    savedTimes(s) {
+        if (this.isInf()) {
+          return ECCPoint.zero
+        }
+        s = bigInt(s).mod(ECCPoint.q).plus(ECCPoint.q).mod(ECCPoint.q)
+        const bin = s.toArray(2).value
+        let ans = ECCPoint.zero
+        let pow = this
+        for( let i = bin.length - 1; i >= 0; i-- ) {
+            if (bin[i] === 1 && i <= 256) {
+              ans = ans.plus(pow)
+            }
+            pow = pow.double()
+        }
+        return ans;
+    }
+
+    // 15ms every time
+    times(s) {
+      if (this.useSave) {
+        return this.savedTimes(s)
+      }
+      if (this.isInf()) {
+        return ECCPoint.zero
+      }
+      s = bigInt(s).mod(ECCPoint.q).plus(ECCPoint.q).mod(ECCPoint.q)
+      if (s.isZero()) {
+        return ECCPoint.zero
+      }
+      // [k, 0] = b1[v1[0], v1[1]], b2[v2[0], v2[1]]
+      // k = b1*v1[0] + b2*v2[0]
+      // 0 = b1*v1[1] + b2*v2[1]
+      // -b2*v2[1] / v1[1] = b1
+      // k = (-b2*v2[1] / v1[1]) * v1[0] + b2*v2[0]
+      // k = b2 * (-v2[1] / v1[1] * v1[0] + v2[0])
+      // k / (-v2[1] / v1[1] * v1[0] + v2[0]) = b2
+      // k * v1[1] / (-v2[1] * v1[0] + v2[0] * v1[1]) = b2
+      // k * v2[1] / (-v1[1] * v2[0] + v1[0] * v2[1]) = b1
+      const v1 = ECCPoint.v1
+      const v2 = ECCPoint.v2
+      let divmod = s.times(v2[1]).divmod(ECCPoint.save.times(-1))
+      if (divmod.remainder.abs().gt(ECCPoint.save.shiftRight(1))) {
+        let round = divmod.quotient.isNegative() ? bigInt[-1] : bigInt[1]
+        divmod.quotient = divmod.quotient.plus(round)
+      }
+      const b1 = divmod.quotient
+      divmod = s.times(v1[1]).divmod(ECCPoint.save)
+      if (divmod.remainder.abs().gt(ECCPoint.save.shiftRight(1))) {
+        let round = divmod.quotient.isNegative() ? bigInt[-1] : bigInt[1]
+        divmod.quotient = divmod.quotient.plus(round)
+      }
+      const b2 = divmod.quotient
+      const v = [b1.times(v1[0]).plus(b2.times(v2[0])), b1.times(v1[1]).plus(b2.times(v2[1]))]
+      const k1 = s.minus(v[0])
+      const k2 = bigInt[0].minus(v[1])
+
+      const arr = [ECCPoint.zero]
+      if (k1.isNegative()) {
+        arr.push(new ECCPoint(this.x, this.y.times(-1), this.z))
+      } else {
+        arr.push(this)
+      }
+      arr.push(arr[arr.length - 1].double())
+      arr.push(arr[arr.length - 1].plus(arr[arr.length-2]))
+
+      // 0, a, 2a, 3a
+      // b, b+a, b+2a, b+3a
+      // 2b, 2b+a, 2b+2a, 2b+3a
+      // 3b, 3b+a, 3b+2a, 3b+3a
+      for (let i = 1; i < 4; i++ ) {
+        const ia = arr[i]
+        // This equals ia.times(L1)
+        arr.push(new ECCPoint(ia.x.times(ECCPoint.cb2).mod(p), ia.y, ia.z))
+        if (k1.isNegative()) {
+          ia.y = ia.y.times(-1)
+        }
+        if (k2.isNegative()) {
+          ia.y = ia.y.times(-1)
+        }
+        arr.push(arr[arr.length - 1].plus(arr[1]))
+        arr.push(arr[arr.length - 2].plus(arr[2]))
+        arr.push(arr[arr.length - 3].plus(arr[3]))
+      }
+      let bink1 = k1.abs().toArray(4).value
+      let bink2 = k2.abs().toArray(4).value
+      const diff = bink2.length - bink1.length
+      if (diff > 0) {
+        bink1 = Array(diff).fill(0).concat(bink1)
+      } else {
+        bink2 = Array(-diff).fill(0).concat(bink2)
+      }
+      let ans = ECCPoint.zero
+      for( let i = 0; i < Math.max(bink1.length, bink2.length); i++ ) {
+        ans = ans.double().double()
+        let ind = bink1[i] + 4 * bink2[i]
+        ans = ans.plus(arr[ind])
+      }
+      /*if (ans.neq(this.saveTimes(s))) {
+        console.log("BAD")
+        throw "BAD"
+      }*/
+      //   2 * (2 * (2 * (A) + 0) + A) + A
+      // + 2 * (2 * (2 * (0) + B) + B) + 0
+      // = 2 * (2 * (2 * (A) + B) + (A+B)) + A
+      return ans
+    }
+
+    affine() {
+      if (this.isInf()) {
+        this.x = bigInt[0]
+        this.y = bigInt[0]
+        return this
+      }
+      const p = ECCPoint.p
+      const zinv = this.z.modInv(p)
+      const zinv2 = zinv.times(zinv)
+      const zinv3 = zinv2.times(zinv)
+      let x = this.x.times(zinv2).mod(p)
+      if (x.isNegative()) {
+        x = x.plus(p)
+      }
+      let y = this.y.times(zinv3).mod(p)
+      if (y.isNegative()) {
+        y = y.plus(p)
+      }
+      this.x = x
+      this.y = y
+      this.z = bigInt[1]
+      this.zz = bigInt[1]
+      return this;
+    }
+
+    toString() {
+      const aff = this.affine()
+      return "ECCPoint(" + aff.x.toString() + ", " + aff.y.toString() + ")"
+    }
+
+    toJSON() {
+      const aff = this.affine()
+      return {
+        x: aff.x.toString(),
+        y: aff.y.toString()
+      }
+    }
+}
+function createWorker(fn) {
+  var blob = new Blob(['self.onmessage = ', fn.toString()], { type: 'text/javascript' });
+  var url = URL.createObjectURL(blob);
+
+  return new Worker(url);
+}
+ECCPoint.p = bigInt("21888242871839275222246405745257275088696311157297823662689037894645226208583");
+ECCPoint.q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+for (let i = 1; i < 20; i++) {
+  if (ECCPoint.p.pow(i).minus(1).mod(ECCPoint.q).eq(0)) {
+    console.log("Hit: ", i)
+  }
+}
+ECCPoint.zero = new ECCPoint(1, 1, 0);
+console.log("TESTING")
+
+p = ECCPoint.p
+// Solutions to L^2 + L + 1 = 0 (mod p)
+lam1 = ECCPoint.lam1 = bigInt("4407920970296243842393367215006156084916469457145843978461")
+// lam2 = bigInt("21888242871839275217838484774961031246154997185409878258781734729429964517155")
+// Solutions to L^3 = 1 (mod p)
+// cb0 = bigInt[1]
+// cb1 = bigInt[3].modPow(p.minus(1).over(3), p)
+cb2 = ECCPoint.cb2 = bigInt[3].modPow(p.minus(1).over(3).times(2), p)
+// cb2 = bigInt[3].modPow(p.minus(1).over(3), p)
+//pt2 = new ECCPoint(cb1, 2)
+//pow1 = pt.times(lam1)
+//pow2 = pt.times(lam2)
+//console.log("CB1: ", pt2.toString())
+//console.log("L1: ", pow1.toString())
+//console.log("L2: ", pow2.toString())
+//console.log("GCD: ", bigInt.gcd(ECCPoint.lam1, ECCPoint.p))
+
+// s * p + t * l = r
+s = [bigInt[1], bigInt[0]]
+t = [bigInt[0], bigInt[1]]
+r = [ECCPoint.q, lam1]
+
+len = 2
+while( !r[len - 1].isZero() ) {
+  const divmod = r[len - 2].divmod(r[len - 1])
+  s.push(s[len - 2].minus(divmod.quotient.times(s[len - 1])))
+  t.push(t[len - 2].minus(divmod.quotient.times(t[len - 1])))
+  r.push(divmod.remainder)
+  len++
+}
+for (let i = len - 1; i >= 0; i--) {
+  if (r[i].times(r[i]).geq(ECCPoint.q)) {
+    v1 = [r[i + 1], t[i + 1].times(-1)]
+    console.log("First V1: ", v1[0].plus(v1[1].times(lam1)).mod(ECCPoint.q))
+    v2 = [r[i], t[i].times(-1)]
+    v22 = [r[i + 2], t[i + 2].times(-1)]
+    if (v22[0].square().plus(v22[1].square()).lt(v2[0].square().plus(v2[1].square()))) {
+      v2 = v22
+    }
+    console.log("V1, V2: ", v1.toString(), v2.toString())
+    break
+  }
+}
+ECCPoint.v1 = v1
+ECCPoint.v2 = v2
+// (-v2[1] * v1[0] + v2[0] * v1[1])
+ECCPoint.save = v2[0].times(v1[1]).minus(v2[1].times(v1[0]))
+console.log(s, t, r)
+
+pt = new ECCPoint(1, 2)
+be = performance.now()
+for (let i = 0; i < 2000; i++) {
+  pt = pt.double()
+}
+en = performance.now()
+console.log("DOUBLE: ", (en - be) / 2000, pt.toString())
+
+console.log("END TESTING")
+
+
+ECCPoint.g = new ECCPoint(1, 2);
+
+hashCode = function(s, m) {
+  if (m === 0) {
+    return ""
+  }
+  if (m === undefined) {
+    return hashCode(s, 15)
+  }
+  var hash = 0, i, chr;
+  if (s.length === 0) return hash;
+  for (i = 0; i < s.length; i++) {
+    chr   = s.charCodeAt(i);
+    hash  = ((hash << 5) - hash) + chr;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return ""+(hash < 0 ? -hash : hash)+hashCode(s, m - 1);
+};
+
+const nextHashP = (pt) => {
+  let hashPt = hashCode(pt.affine().toString())
+  return ECCPoint.findNextY(hashPt).affine()
+}
+ECCPoint.h = nextHashP(ECCPoint.g)
+
+ECCPoint.hashSet = [nextHashP(ECCPoint.h)]
+for (let i = 1; i < 128; i++) {
+  ECCPoint.hashSet.push(nextHashP(ECCPoint.hashSet[i - 1]))
+}
+
+num1 = bigInt(hashCode("hey")).mod(ECCPoint.q)
+num2 = bigInt(hashCode("hey2")).mod(ECCPoint.q)
+
+// Let V8 compile
+v8delay = 3
+
+// PERF1
+for (let i = 0; i < 100; i++) {
+  if (i == v8delay) {
+    start = performance.now()
+  }
+  calc = bigInt[2].modPow(ECCPoint.p.minus(1).over(4), ECCPoint.p)
+}
+end = performance.now()
+console.log("SQRT MOD P: ", (end - start) / (100 - v8delay))
+
+// PERF1.5
+for (let i = 0; i < 100; i++) {
+  if (i == v8delay) {
+    start = performance.now()
+  }
+  calc = bigInt(hashCode(2 + i + "")).modInv(ECCPoint.p)
+}
+end = performance.now()
+console.log("MOD INV P: ", (end - start) / (100 - v8delay))
+
+// PERF2
+for (let i = 0; i < 15; i++) {
+  if (i == v8delay) {
+    start = performance.now()
+  }
+  calc = ECCPoint.g.times(num1)
+}
+end = performance.now()
+console.log("TIMES: ", (end - start) / (15 - v8delay))
+
+// PERF 3
+ECCPoint.g.useSave = true
+for (let i = 0; i < 15; i++) {
+  if (i == v8delay) {
+    start = performance.now()
+  }
+  calc = ECCPoint.g.times(num2)
+  ECCPoint.g.dub = undefined
+}
+end = performance.now()
+console.log("SAVE TIMES INIT: ", (end - start) / (15 - v8delay))
+
+// PERF 3
+ECCPoint.g.useSave = true
+for (let i = 0; i < 15; i++) {
+  if (i == v8delay) {
+    start = performance.now()
+  }
+  calc = ECCPoint.g.times(num2)
+}
+end = performance.now()
+console.log("SAVE TIMES RECUR: ", (end - start) / (15 - v8delay))
+
+// PERF 4
+for (let i = 0; i < 15; i++) {
+  if (i == v8delay) {
+    start = performance.now()
+  }
+  calc = ECCPoint.g.plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g)
+}
+end = performance.now()
+console.log("PLUS x 128: ", (end - start) / (15 - v8delay))
+  </script>
+</body>
+</html>

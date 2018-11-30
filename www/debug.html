@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<head>
+  <title>Monereum</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <img src="images/logo.svg" width="65" height="65" alt="">
+      <h1>
+        Monereum
+      </h1>
+    </div>
+    <nav>
+      <ul>
+        <li>Market</li>
+        <li>Transactions</li>
+        <li>Wallet</li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <div id="wallet">
+        <form onsubmit="changePerson(event)">
+          <h2>Change Person</h2>
+          <input type="text" name="id" autocomplete="off">
+          <br/>
+          Keys:
+          <br/>
+          <input type="text" name="numKeys" autocomplete="off">
+          <br/>
+          <input type="submit" name="submit">
+        </form>
+        <h2>Result</h2>
+        <p id="log"></p>
+        <textarea id="result" name="result" rows="8" cols="80">
+        </textarea>
+        <div id="wallet_form">
+          <h2>Wallet</h2>
+          <form onsubmit="getPublicKey(event)">
+            <h3>Get Public Key</h3>
+            <input type="submit" name="submit">
+          </form>
+          <form onsubmit="createTx(event)">
+            <h3>Create Transaction</h3>
+            Amount:
+            <br/>
+            <input type="text" name="amount" autocomplete="off"/>
+            <br/>
+            <input type="submit" name="submit">
+          </form>
+          <form onsubmit="createFullTx(event)">
+            <h3>Create Full Transaction</h3>
+            To:
+            <br/>
+            <textarea name="to" rows="8" cols="80">
+            </textarea>
+            <br/>
+            Amount:
+            <br/>
+            <input type="text" name="amount" autocomplete="off"/>
+            <br/>
+            <input type="submit" name="submit">
+          </form>
+        </div>
+        <div id="miner_form">
+          <h2>Miner</h2>
+          <form onsubmit="mintTx(event)">
+            <h3>Mint</h3>
+            <textarea name="tx" rows="8" cols="80">
+            </textarea>
+            <br/>
+            <input type="submit" name="submit">
+            <br/>
+          </form>
+          <form onsubmit="submitFullTx(event)">
+            <h3>Submit</h3>
+            <textarea name="fullTx" rows="8" cols="80">
+            </textarea>
+            <br/>
+            <input type="submit" name="submit">
+            <br/>
+          </form>
+        </div>
+      </div>
+    </section>
+    <footer>
+      <small>
+        Nicholas Pipitone &copy; Copyright 2018.
+      </small>
+    </footer>
+  </main>
+  <script src="js/static/bundle.js"></script>
+</body>

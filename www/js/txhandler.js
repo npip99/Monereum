@@ -1,4 +1,4 @@
-const bigInt = require('big-integer')
+const bigInt = require('./bigint')
 const wallet = require('./wallet')
 const hash = require('./hash')
 const pt = require('./ecc-point')
@@ -216,7 +216,8 @@ class TXHandler {
     const funds = []
     for (const fund of rp.funds) {
       const id = hash(fund)
-      if (!this.transactions[id].tx) {
+      if (!this.transactions[id] || !this.transactions[id].tx) {
+        console.log(this.transactions)
         console.error("Ring Proof with unknown TX: ", result, id)
       }
       funds.push(this.transactions[id].tx)

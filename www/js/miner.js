@@ -3,7 +3,7 @@ const hash = require('./hash')
 const parser = require('./parser')
 const constants = require('./constants')
 const pt = require('./ecc-point')
-const bigInt = require('big-integer')
+const bigInt = require('./bigint')
 
 const zip = (arr, ...arrs) => {
   return arr.map((val, i) => arrs.reduce((a, arr) => [...a, arr[i]], [val]));

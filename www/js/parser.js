@@ -1,4 +1,4 @@
-const bigInt = require('big-integer')
+const bigInt = require('./bigint')
 const pt = require('./ecc-point')
 const constants = require('./constants')
 
