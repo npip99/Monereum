@@ -1,9 +1,5 @@
 const bigInt = require('big-integer');
 
-const NativeBigInt = function(val, base) {
-  return new NativeBigIntClass(val, base);
-}
-
 class NativeBigIntClass {
   constructor(val, base) {
     if (val.isBigInt) {
@@ -18,6 +14,24 @@ class NativeBigIntClass {
       throw "Invalid base: " + base
     }
     this.isBigInt = true
+  }
+
+  static randBetween(low, high) {
+    low = NativeBigInt(low)
+    high = NativeBigInt(high)
+    if (high.lt(low)) {
+      throw "Low must be less than High"
+    }
+    const shift = low.negate()
+    low = low.plus(shift)
+    high = high.plus(shift)
+    const strHigh = high.toString()
+    let r = ""
+    while (r.length <= strHigh.length + 10) {
+      r += Math.round(Math.random() * 1e12).toString()
+    }
+    const rand = NativeBigInt(r).mod(high.plus(1))
+    return rand.minus(shift)
   }
 
   isZero() {
@@ -38,6 +52,10 @@ class NativeBigIntClass {
     } else {
       return this
     }
+  }
+
+  negate() {
+    return NativeBigInt(-this.value)
   }
 
   plus(v) {
@@ -143,7 +161,7 @@ class NativeBigIntClass {
 
   pow(v) {
     v = NativeBigInt(v)
-    return NativeBigInt(this.value ** p.value)
+    return NativeBigInt(this.value ** v.value)
   }
 
   modPow(v, p) {
@@ -156,7 +174,7 @@ class NativeBigIntClass {
     for (let i = 0; i < bin.length; i++) {
       ans = (ans * ans) % p.value
       if (bin[i]) {
-        ans = ans * this.value
+        ans = (ans * this.value) % p.value
       }
     }
     return NativeBigInt(ans % p.value)
@@ -188,8 +206,8 @@ class NativeBigIntClass {
   }
 
   toString(base) {
+    const a = "a".charCodeAt(0)
     if (base == 16) {
-      const a = "a".charCodeAt(0)
       const vals = this.toArray(16).value
       let ret = ""
       for (let i of vals) {
@@ -200,7 +218,7 @@ class NativeBigIntClass {
         }
       }
       return ret
-    } else if(base === undefined) {
+    } else if( base === undefined) {
       return "" + this.value
     } else {
       throw "Bad base: " + base
@@ -212,8 +230,19 @@ class NativeBigIntClass {
   }
 }
 
-for(let i = -10; i < 10; i++) {
-  NativeBigInt[i] = NativeBigInt(i)
+const NativeBigInt = function(val, base) {
+  if (val.isBigInt) {
+    return val
+  }
+  return new NativeBigIntClass(val, base);
+}
+
+NativeBigInt.randBetween = NativeBigIntClass.randBetween
+
+if (BigInt !== undefined) {
+  for(let i = -10; i < 10; i++) {
+    NativeBigInt[i] = NativeBigInt(i)
+  }
 }
 
 console.log(NativeBigInt(5).modInv(7))

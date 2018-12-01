@@ -8,12 +8,13 @@
 </head>
 <body>
 <script>
-const NativeBigInt = function(val, base) {
-  return new NativeBigIntClass(val, base);
-}
 
 class NativeBigIntClass {
   constructor(val, base) {
+    if (val.isBigInt) {
+      this.value = val.value
+      return
+    }
     if (base === undefined) {
       this.value = BigInt(val)
     } else if (base === 16) {
@@ -21,6 +22,25 @@ class NativeBigIntClass {
     } else {
       throw "Invalid base: " + base
     }
+    this.isBigInt = true
+  }
+
+  static randBetween(low, high) {
+    low = NativeBigInt(low)
+    high = NativeBigInt(high)
+    if (high.lt(low)) {
+      throw "Low must be less than High"
+    }
+    const shift = low.negate()
+    low = low.plus(shift)
+    high = high.plus(shift)
+    const strHigh = high.toString()
+    let r = ""
+    while (r.length <= strHigh.length + 10) {
+      r += Math.round(Math.random() * 1e12).toString()
+    }
+    const rand = NativeBigInt(r).mod(high.plus(1))
+    return rand.minus(shift)
   }
 
   isZero() {
@@ -41,6 +61,10 @@ class NativeBigIntClass {
     } else {
       return this
     }
+  }
+
+  negate() {
+    return NativeBigInt(-this.value)
   }
 
   plus(v) {
@@ -130,7 +154,7 @@ class NativeBigIntClass {
   toArray(base) {
     const isNegative = this.value < 0
     const ret = []
-    let v = this.value
+    let v = isNegative ? -this.value : this.value
     base = BigInt(base)
     while (v > 0) {
       const div = v / base
@@ -149,23 +173,33 @@ class NativeBigIntClass {
     return NativeBigInt(this.value ** v.value)
   }
 
+
   modPow(v, p) {
     v = NativeBigInt(v)
     p = NativeBigInt(p)
-    const bin = v.toArray(2).value
+    const bin = v.toArray(4).value
 
     let ans = BigInt(1)
 
+    const t = this.value
+    p = p.value
+
+    // Sliding Window
+    const win = [BigInt(1), t, (t * t) % p]
+    win.push((win[win.length - 1] * t) % p)
+
     for (let i = 0; i < bin.length; i++) {
-      ans = (ans * ans) % p.value
+      ans = (ans * ans) % p
+      ans = (ans * ans) % p
       if (bin[i]) {
-        ans = (ans * this.value) % p.value
+        ans = (ans * win[bin[i]]) % p
       }
     }
-    return NativeBigInt(ans % p.value)
+    return NativeBigInt(ans)
   }
 
   modInv(p) {
+    // Copied from https://github.com/peterolson/BigInteger.js
     let t = BigInt(0)
     let newT = BigInt(1)
     let r = NativeBigInt(p).value
@@ -180,7 +214,9 @@ class NativeBigIntClass {
       newT = lastT - (q * newT);
       newR = lastR - (q * newR);
     }
-    if (r != 1) throw new Error(this.toString() + " and " + p.toString() + " are not co-prime");
+    if (r != 1) {
+      throw new Error(this.toString() + " and " + p.toString() + " are not co-prime");
+    }
     if (t < 0) {
       t = t + p;
     }
@@ -215,9 +251,26 @@ class NativeBigIntClass {
   }
 }
 
+const NativeBigInt = function(val, base) {
+  if (val.isBigInt) {
+    return val
+  }
+  return new NativeBigIntClass(val, base);
+}
+
+NativeBigInt.randBetween = NativeBigIntClass.randBetween
+
 for(let i = -10; i < 10; i++) {
   NativeBigInt[i] = NativeBigInt(i)
 }
+
+s = performance.now()
+sum = bigInt(5)
+for (let i = 0; i < 10; i++) {
+  sum = sum.times(sum)
+}
+e = performance.now()
+console.log("bigInt: ", (e - s)/10)
 
 bigInt = NativeBigInt
 s = performance.now()
@@ -227,13 +280,6 @@ for (let i = 0; i < 10; i++) {
 }
 e = performance.now()
 console.log("Native: ", (e - s)/10)
-s = performance.now()
-sum = bigInt(5)
-for (let i = 0; i < 10; i++) {
-  sum = sum.times(sum)
-}
-e = performance.now()
-console.log("bigInt: ", (e - s)/10)
 
 class ECCPoint {
     static decompress(x, key) {
@@ -400,9 +446,9 @@ class ECCPoint {
       const y = m.times(s.minus(x)).minus(y2.square().shiftLeft(3)).mod(p)
       const z = this.y.plus(this.z).square().minus(y2).minus(z2).mod(p)
       this.dub = new ECCPoint(x, y, z);
-			if (this.useSave) {
-				this.dub.affine()
-			}
+      if (this.useSave) {
+        this.dub.affine()
+      }
       return this.dub;
     }
 
@@ -447,14 +493,14 @@ class ECCPoint {
       // k * v2[1] / (-v1[1] * v2[0] + v1[0] * v2[1]) = b1
       const v1 = ECCPoint.v1
       const v2 = ECCPoint.v2
-      let divmod = s.times(v2[1]).divmod(ECCPoint.save.times(-1))
-      if (divmod.remainder.abs().gt(ECCPoint.save.shiftRight(1))) {
+      let divmod = s.times(v2[1]).divmod(ECCPoint.cross.times(-1))
+      if (divmod.remainder.abs().gt(ECCPoint.cross.shiftRight(1))) {
         let round = divmod.quotient.isNegative() ? bigInt[-1] : bigInt[1]
         divmod.quotient = divmod.quotient.plus(round)
       }
       const b1 = divmod.quotient
-      divmod = s.times(v1[1]).divmod(ECCPoint.save)
-      if (divmod.remainder.abs().gt(ECCPoint.save.shiftRight(1))) {
+      divmod = s.times(v1[1]).divmod(ECCPoint.cross)
+      if (divmod.remainder.abs().gt(ECCPoint.cross.shiftRight(1))) {
         let round = divmod.quotient.isNegative() ? bigInt[-1] : bigInt[1]
         divmod.quotient = divmod.quotient.plus(round)
       }
@@ -614,8 +660,7 @@ for (let i = len - 1; i >= 0; i--) {
 ECCPoint.v1 = v1
 ECCPoint.v2 = v2
 // (-v2[1] * v1[0] + v2[0] * v1[1])
-ECCPoint.save = v2[0].times(v1[1]).minus(v2[1].times(v1[0]))
-console.log(s, t, r)
+ECCPoint.cross = v2[0].times(v1[1]).minus(v2[1].times(v1[0]))
 
 pt = new ECCPoint(1, 2)
 be = performance.now()
@@ -631,6 +676,7 @@ console.log("END TESTING")
 ECCPoint.g = new ECCPoint(1, 2);
 
 hashCode = function(s, m) {
+  // https://stackoverflow.com/questions/7616461/generate-a-hash-from-string-in-javascript
   if (m === 0) {
     return ""
   }
@@ -662,19 +708,32 @@ num1 = bigInt(hashCode("hey")).mod(ECCPoint.q)
 num2 = bigInt(hashCode("hey2")).mod(ECCPoint.q)
 
 // Let V8 compile
-v8delay = 3
+v8delay = 15
 
-// PERF1
+// Performance will scale based on your hardware
+
+// 0.28ms
+ac = bigInt[2]
+for (let i = 0; i < 1000; i++) {
+  if (i == v8delay) {
+    start = performance.now()
+  }
+  ac = ac.modPow(ECCPoint.q, ECCPoint.p)
+}
+end = performance.now()
+console.log("MOD POW: ", (end - start) / (1000 - v8delay))
+
+// 0.29ms
 for (let i = 0; i < 100; i++) {
   if (i == v8delay) {
     start = performance.now()
   }
-  calc = bigInt[2].modPow(ECCPoint.p.minus(1).over(4), ECCPoint.p)
+  calc = bigInt(2 + i).modPow(ECCPoint.p.minus(1).over(4), ECCPoint.p)
 }
 end = performance.now()
 console.log("SQRT MOD P: ", (end - start) / (100 - v8delay))
 
-// PERF1.5
+// 0.08ms
 for (let i = 0; i < 100; i++) {
   if (i == v8delay) {
     start = performance.now()
@@ -684,19 +743,19 @@ for (let i = 0; i < 100; i++) {
 end = performance.now()
 console.log("MOD INV P: ", (end - start) / (100 - v8delay))
 
-// PERF2
-for (let i = 0; i < 15; i++) {
+// 2.33ms
+for (let i = 0; i < 150; i++) {
   if (i == v8delay) {
     start = performance.now()
   }
   calc = ECCPoint.g.times(num1)
 }
 end = performance.now()
-console.log("TIMES: ", (end - start) / (15 - v8delay))
+console.log("TIMES: ", (end - start) / (150 - v8delay))
 
-// PERF 3
+// 4ms
 ECCPoint.g.useSave = true
-for (let i = 0; i < 15; i++) {
+for (let i = 0; i < 150; i++) {
   if (i == v8delay) {
     start = performance.now()
   }
@@ -704,28 +763,28 @@ for (let i = 0; i < 15; i++) {
   ECCPoint.g.dub = undefined
 }
 end = performance.now()
-console.log("SAVE TIMES INIT: ", (end - start) / (15 - v8delay))
+console.log("SAVE TIMES INIT: ", (end - start) / (150 - v8delay))
 
-// PERF 3
+// 1.7ms
 ECCPoint.g.useSave = true
-for (let i = 0; i < 15; i++) {
+for (let i = 0; i < 150; i++) {
   if (i == v8delay) {
     start = performance.now()
   }
   calc = ECCPoint.g.times(num2)
 }
 end = performance.now()
-console.log("SAVE TIMES RECUR: ", (end - start) / (15 - v8delay))
+console.log("SAVE TIMES RECUR: ", (end - start) / (150 - v8delay))
 
-// PERF 4
-for (let i = 0; i < 15; i++) {
+// 1.7ms
+for (let i = 0; i < 150; i++) {
   if (i == v8delay) {
     start = performance.now()
   }
   calc = ECCPoint.g.plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g).plus(ECCPoint.g)
 }
 end = performance.now()
-console.log("PLUS x 128: ", (end - start) / (15 - v8delay))
+console.log("PLUS x 128: ", (end - start) / (150 - v8delay))
   </script>
 </body>
 </html>

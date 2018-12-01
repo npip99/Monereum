@@ -25,10 +25,10 @@ class Wallet {
 
   generateKey() {
     this.privSeed = hash(this.privSeed.xor(this.masterSeed))
-    
+
     const spend = this.privSeed.mod(pt.q)
     const spendPub =  pt.g.times(spend).affine()
-    const generator = hash(spendPub).and(bigInt[1].shiftLeft(32).minus(1))
+    const generator = hash(spendPub).and(bigInt[1].shiftLeft(64).minus(1))
     const view = this.masterView
     const key = {
       spendPub: spendPub,
@@ -44,11 +44,11 @@ class Wallet {
 
   createTransaction(pubKey, amount, noBlindingKey) {
     this.sentSeed = hash(this.sentSeed.xor(this.masterSeed));
-    
+
     const rand = this.sentSeed.mod(pt.q);
 		amount = bigInt(amount)
     const tx = {}
-    const generator = hash(pubKey.spendPub).and(bigInt[1].shiftLeft(32).minus(1))
+    const generator = hash(pubKey.spendPub).and(bigInt[1].shiftLeft(64).minus(1))
     tx.src = pt.g.times(generator).hashInP().times(rand).affine()
     const secret = hash(pubKey.viewPub.times(rand).affine())
     tx.dest = pt.g.times(secret).plus(pubKey.spendPub).affine()
@@ -80,15 +80,19 @@ class Wallet {
     }
     let secret = hash(tx.src.times(this.masterView).affine());
     const mostMoney = bigInt[1].shiftLeft(64);
-    
+
     let blindingKey = hash(secret)
     let amount = tx.commitmentAmount.minus(hash(blindingKey)).mod(pt.q).plus(pt.q).mod(pt.q)
+
+    // Quickly skip if the commitmentAmount isn't possible
     if (tx.commitmentAmount.gt(mostMoney)) {
       if (amount.gt(mostMoney)) {
         return null
       }
     }
-    
+
+    // sG + B = D, so B = D - sG
+    // We can search for B in a hashmap
     let privKey = null;
     const spendPub = tx.dest.minus(pt.g.times(secret)).affine()
     const key = this.spendPubs[spendPub]
@@ -251,7 +255,7 @@ class Wallet {
 		}
     return ret
   }
-  
+
   verifyRangeProof(rangeProof) {
     const {commitment, rangeCommitments, rangeBorromeans, rangeProofs, indices} = rangeProof;
     let sum = pt.zero
@@ -286,11 +290,11 @@ class Wallet {
       return '"' + item.toString() + '"'
     }
   }
-  
+
   static formatArguments(...args) {
     return args.map(Wallet.formatItem).join(",")
   }
-  
+
   formatRangeProof(rangeProof) {
     return Wallet.formatArguments(
       rangeProof.commitment,
@@ -329,9 +333,9 @@ class Wallet {
     this.spendPubs = {}
     this.masterKey = this.generateKey()
   }
-  
+
   saveWallet() {
-    
+
   }
 }
 
