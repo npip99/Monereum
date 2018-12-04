@@ -28,31 +28,39 @@ I believe whitepapers to be rather opaque, so I'm providing an explanation of th
 
 ### Keys
 
-Each public key consists of a view key and a spend key. You may give the view key to someone to allow them to see incoming transactions and verify transaction receipts. A wallet can have many public keys, and a given view key only works for a single public key. The spend key is require to spend the coin. Keys are generated such that the view key can be deduced from the spend key. Someone with a view key cannot see outgoing transactions.
+Each public address consists of a public view address and a public spend address. The wallet owner has the view key and spend key. You may give the view key (And public address) to someone, and they will be able see incoming transactions, amounts, and verify transaction receipts. The spend key, however, is required to spend the received coin. A Monereum wallet is designed so that there is a single master view key. Any amount of spend keys can be created, each with a public spend address. Many public view keys can be generated, so that the master view key can still view the transaction. A wallet thus contains 1 master view key, and `N` spend keys. `N` is the number of addresses the wallet holder wishes to receive funds from. These addresses cannot be linked together.
+
+### Commitments
+
+A Commitment is a number that represents a hidden value, and can be added or subtracted. They can be designed so that an addition of `k` commitments is zero, but this can only be done when sum of the amounts is also equal to zero. However, commitments do not necessarily have to sum to zero, even when their amounts sum to zero. This way, information about sums of commitments is revealed only when it is desired.
 
 ### Transaction Rings
 
-A single transaction ring consists of `5` input coins, and `1` output Commitment. A Commitment is a number that represents a hidden value, and can be added or subtracted. They can be designed so that an addition of `k` rings gives 0, only when sum of the amounts is also equal to zero. However, commitments do not necessarily sum to zero even when their amounts sum to zero, so information is revealed only when it is desired. A Ring Proof also contains a Key Image. The rest of the Ring Proof data exists as a ZK proof that the Key Image uniquely but anonymously represents a single input coin with index `i`, and that the Commitment represents a value equal to the value of the `i`th coin. An important property of the Key Image is that there are no two key images that represent the same input coin.
+A single transaction ring consists of `5` input coins, and `1` output Commitment. A Transaction Ring's Proof contains a Key Image, and proof data. The Ring Proof data exists as a ZK proof that the Key Image uniquely but anonymously represents a single input coin with index `i`, and that the output Commitment represents a value equal to the value of the `i`th coin. An important property of the Key Image is that there are no two key images that represent the same input coin, so that once a coin is spent, it cannot be spent again.
 
 ### Transactions
 
-A single transaction consists of `N` transaction rings, `M` range proofs, `M` output coins, and a miner fee `f`. The hash of the output coins and the miner fee is included as a seed to the Ring Proofs, so that we can verify that both were signed by the input coin holder. The sum of the `N` output Commitments from the `N` transaction rings must equal the sum of the `M` output commitments plus a commitment to the miner fee. This is verified upon submission. The `M` range proofs must prove that each coin in `M` is smaller than `2^64`. We can generally assume that `M = 2`, as sending MNR to a single person is most optimally done by paying that person the precise amount needed, and paying yourself the remaining "spare change". Both `N` and `M` are limited to 5.
+A single transaction consists of `N` transaction rings, `M` range proofs, `M` output coins, and a miner fee `f`. The hash of the output coins and the miner fee is included as a seed to the Ring Proofs, so that we can verify that both were signed by the input coin holder. The sum of the `N` output Commitments from the `N` transaction rings must equal the sum of the `M` output commitments plus a commitment to the miner fee (Which can be done as discussed in the Commitments section). This is verified upon submission. The `M` range proofs must prove that each coin in `M` is smaller than `2^64`, to prevent wrapping around the modulus. We can generally assume that `M = 2`, as sending MNR to a single person is most optimally done by paying that person the precise amount needed, and paying yourself the remaining "spare change". Both `N` and `M` are limited to 5.
 
-The algorithm for verifying ring proofs and range proofs, along with correctness proofs of signer ambiguity, unforgeability, and linkability of key images, is already provided in Monero's whitepaper.
+The algorithms for creating and verifying ring proofs and range proofs, along with correctness proofs of signer ambiguity, unforgeability, and linkability of key images and commitments, is already provided in Monero's whitepaper.
+
+### Sending transactions
 
 When an owner of Monereum coins wishes to make a transaction, (s)he can broadcast the transaction data behind a Tor network.
 
-We note that the miner's public key was not signed in the ring proofs, only the fee value itself, so anyone may claim the miner fee. If the transaction proofs are legitimate, and the miner fee `f` is greater than the estimated gas fees of committing the transaction (Even by a negligible amount), then it would be economically beneficial for anyone to submit the transaction. Thus, the transaction will indeed get submitted by someone (the "miner"). This is important, as having to submit a transaction yourself will reveal your Ethereum address.
+We note that the miner's public key was not signed in the ring proofs, only the fee value itself, so anyone may claim the miner fee. If the transaction proofs are legitimate, and the miner fee `f` is greater than the estimated gas fees of committing the transaction (Even by a negligible amount), then it would be economically beneficial for someone to submit the transaction. Thus, the transaction will indeed get submitted by someone (the "miner"). This is important, as having to submit a transaction yourself will reveal your Ethereum address.
 
 ### Bounties
 
-Upon submission, a miner posts a bounty equal to 1 ETH plus the maximum value of the transaction in MNR (Based on the highest bit in the range proof). A timestamp for the transaction is then saved (The "timer"). A submission will broadcast all of the transaction data as an EVM event, along with internally saving a hash of each ring proof and range proof. At this point, all the output coins are "pending".
+Upon submission, a miner posts a bounty equal to 1 ETH plus 1/16th the maximum value of the transaction in MNR (Based on the highest bit in the range proof). A timestamp for the transaction is then saved (The "timer"). A submission will broadcast all of the transaction data as an EVM event, along with internally saving a hash of each ring proof and range proof. At this point, all the output coins are "pending".
 
-Now, anyone may claim the bounty of an incorrect pending transaction by posting their own 1 ETH bounty, and disputing a ring proof or range proof. Disputing a proof will freeze the timer, and hold the output coins in a disputed state. Only the hash is provided when a proof is being disputed.
+Now, anyone may claim the bounty of an incorrect pending transaction by posting their own 1 ETH bounty, and disputing a ring proof or range proof. Disputing a proof will freeze the timer, and hold the output coins in a disputed state. Only the hash is provided when a proof is being disputed (The hash that was previously saved).
 
-At this point anyone may call a verification function with all of the proof data, which will then set the truth value of the proof's hash to true or false, based on the legitimacy of the proof. The one who believes he is correct will presumably call this function. If the proof is legitimate, then the one who called the verification function will be awarded 0.5 ETH. If the proof is illegitimate, the original disputer is awarded 0.5 ETH, and his 1 ETH bounty is returned. Then, the output coins are either marked Rejected or Pending based on the result of the dispute. The timer resets if the coins are set to Pending. The remaining 0.5 ETH disappears. An important aspect is that anyone may claim a false dispute's bounty, so that disputes on legitimate proofs will be reported quickly. However, only the disputer can claim a correct dispute. This way he feels safe spending gas to freeze the timer in times of high gas prices (Or an intentional attack on gas prices).
+At this point anyone may call a verification function with all of the proof data, which will then set the truth value of the proof's hash to true or false, based on the legitimacy of the proof. The one who believes he is correct will presumably call this function. If the proof is legitimate, then the one who called the verification function will be awarded 0.5 ETH. If the proof is illegitimate, the original disputer is awarded 0.5 ETH, and his 1 ETH bounty is returned. Then, the output coins are either marked Rejected or Pending based on the result of the dispute. The timer resets if the coins are set to Pending. The remaining 0.5 ETH disappears. An important aspect is that anyone may claim a false dispute's bounty, so that disputes on legitimate proofs will be reported quickly. However, only the disputer can claim a correct dispute. This way he feels safe spending gas to freeze the timer during times of high gas prices (Or an intentional attack on gas prices).
 
-Though the disputer posts a 1 ETH bounty, this isn't necessary to prove correctness. It is only added for practical reasons of reducing false dispute percentages.
+After three times the pending time, anyone may claim axxn illegitimate proof's bounty. This way the Key Images that were marked for that transaction will then be freed, for the actual owner to spend them properly.
+
+Though the disputer posts a 1 ETH bounty, this isn't necessary. It is only added for practical reasons of reducing false dispute percentages.
 
 When the timer is complete, anyone can commit the output coins. Upon commiting the output coins, the coins are then "Accepted", and no further disputes are possible. Additionally, the miner's 1 ETH bounty is returned. However, if two times the pending time has elapsed, then the next person who commits the output coins may claim the miner's bounty. This forces a transaction to resolve quickly.
 
@@ -66,7 +74,7 @@ Turning an ERC20 token into encrypted Monero simply requires the sender to have 
 
 Note: It is possible to hide all balances as pedersen commitments, but this would make the `balanceOf` operation impossible. I would like to eventually see an Monereum compatible implementation of a quasi-ERC20 token that hides balances, however.
 
-Turning an encrypted Monereum coin into an ERC20 token requires signing the coin with the key image, which gets verified on the spot. This is of course revealing, so wallet implementations need to ensure that only funds that have been self-mixed are used. The self-mixing should be entirely abstracted away. Please note that using "spare change" is not self-mixing, since if a previous transaction has a spent coin A, and a spare change coin B, then the owner of A will be able to see when you turn B into an ERC20 token, revealing yourself to the owner of A.
+Turning an encrypted Monereum coin into an ERC20 token requires signing the coin with the key image, which gets verified on the spot. This is of course revealing, so wallet implementations need to ensure that only funds that have been self-mixed are used. The self-mixing should be entirely abstracted away. Note that using "spare change" is not self-mixing, since if a previous transaction involving sending coin A to someone, with a spare change coin B, then the owner of A will be able to see when you turn B into an ERC20 token. This would reveal yourself to the owner of A.
 
 ### ERC20 Allowances to Monereum Addresses
 
@@ -74,7 +82,7 @@ Allowances may also be made to Monereum public addresses, allowing them to spend
 
 ### Transaction Cancelling
 
-Ethereum allows cancelling transactions through nonce fiddling, though not many front-ends implement this behavior. Not knowing when a transaction will clear is quite annoying when a gas price is accidentally set too low, forcing you to wait for hours before a transaction is confirmed. I found it important to verify the ease of transaction cancelling while maintaining anonymity.
+Ethereum allows cancelling transactions through nonce fiddling, though not many front-ends implement this behavior. Not knowing when a transaction will clear is quite bothersome when a gas price is accidentally set too low, forcing you to wait for hours before a transaction is confirmed. I found it important to verify the ease of transaction cancelling while maintaining anonymity.
 
 If a miner fee was too low, a transaction is cancelled by simply sending coins to yourself using one of the key images, and using a large enough miner fee. Key image uniqueness is verified upon submission to prevent an adversary from forcing a miner to lose his bounty (By submitting the transaction before him). It will be publicly known that a transaction was cancelled, and the canceled and cancelee transactions will be linked. No other information will be revealed, however. Self-mixing will unlink the cancelee. Front-ends should implement this self-sending as part of the cancelling procedure, and should still use `M = 2` output coins to remain hidden.
 
@@ -92,25 +100,26 @@ Notice for developers: If a contract is using MNR and has a scheme that punishes
 
 ## Interacting with the MNR contract
 
-### Encrypting a coin
+### Creating a coin
 
-If you wish to create a coin sending an amount `b` to a public key `(A, B)`, then you must first choose a random scalar `r`. Then, you calculate the following:
+If you wish to create a coin sending an amount `k` to a public key `(A, B)`, then you must first choose a random scalar `r`. Then, you calculate the following:
 
 ```
-Src = rG = R
-Dest = hash(rA)G + B
-Commitment = hash^2(s)G + bH
-CommitmentAmount = (hash^3(s) + b) mod q
+Src = r*hashP(B) = R
+Secret = hash(rA)
+Dest = Secret*G + B
+Commitment = hash(Secret)*G + k*H
+CommitmentAmount = (hash(hash(Secret)) + k) mod q
 return (Src, Dest, Commitment, CommitmentAmount)
 ```
 
-In this case, `hash^n(x)` means hash called iteratively on itself `n` times.
+In this case, `hashP` is a hash function that maps to ECC Points rather than integers. This is done so that the same view key can be used for all of a wallet's public addresses (Which have unique `B`s). Additionally, you see that Commitment and CommitmentAmount can be deduced from the shared secret, using something akin to a block cipher (But rather a shared PRNG).
 
-Note: If `r` is not very random or is publicly revealed, then anyone may view the coin's owner and generate the receipt. However, it remains that no one can spend it (Of course, as otherwise the sender could spend it). The receiver does not have to worry about this, since spending the coin will cause it to be anonymized with other coins in a ring signature. This also obscures the sender from knowing when a coin is spent, which is important for maintaining anonymity.
+Note: If `r` is not very random or is publicly revealed, then anyone may view the coin's owner and generate the receipt (Since at that point everyone knows just as much as the sender). However, it remains that no one can spend it (Of course, as otherwise the sender could spend it). The receiver does not have to worry about this, since spending the coin will cause it to be anonymized with other coins in a transaction ring. This also obscures the sender from knowing when a sent coin is spent, which is important for maintaining anonymity.
 
 ### Decrypting a coin
 
-Say you own the private key `(a, b)` for the public `(A, B)`, and have a coin `(Src, Dest, Commitment, CommitmentAmount)` that was sent to you. Then you can retrieve the private key, coin amount, and pedersen blinding factor for that coin by executing the following:
+Say you own the private key `(a, b)` for the public `(A, B)`, and have a coin `(Src, Dest, Commitment, CommitmentAmount)` that was potentially sent to you. Then you can retrieve the private key, coin amount, and pedersen blinding factor for that coin by executing the following:
 
 ```
 s = hash(aR)
@@ -124,13 +133,17 @@ return (privateKey, pedersenBlinding, amount)
 
 You may note that if `b` is not available, then `(pedersenBlinding, amount)` can still be calculated. The value `a` is the view key, while the value `b` is the spend key.
 
+### Wallet handling
+
+A wallet has a seed mnemonic that deterministically generates wallet parameters. It generates a single master view key `a`, and generates many spend keys `b_i`. This way, if a wallet is lost, the funds can be regenerated from the mnemonic. Since `B_i = b_iG`, and a given transaction's `Dest` is equal to some `hash(aR)*G + B_i`, regenerating a wallet is efficient. Simply store the first hundred or so `B_i` in a hashmap, and then calculate `Dest - hash(aR)*G` for each transaction. The resulting point can be looked up in the hashmap to see if any `B_i` matches. If a match is found, then the coin may be decrypted using `(a, b_i)`, or simply viewed using `(a)` if `b_i` is not available.
+
 ### Transaction Receipts
 
-The Diffie-Hellman exchange that occurs when transferring `rA = aR` allows for easy receipt generation. Simply send the receipt `hash(hash(rA) + 1) = hash(s + 1)` to prove that you sent the message. Only someone with the view key will be able to link this receipt to a transaction by knowing the secret `s`, which allows the receipt to be transmitted over an insecure channel. `hash^3(s)` is not a secure receipt as knowing or brute-forcing the amount `b` can reveal `hash^2(s)`, which generates `hash^3(s)`.
+The Diffie-Hellman exchange that occurs when agreeing upon `rA = aR` allows for easy receipt generation. Simply send the receipt `hash(hash(rA) + 1) = hash(s + 1)` to prove that you sent the message. Only someone with the view key will be able to link this receipt to a transaction by knowing the secret `s`, which allows the receipt to be transmitted over an insecure channel. `hash^3(s)` is not a secure receipt as knowing or brute-forcing the amount `b` can reveal `hash^2(s)`, which generates `hash^3(s)`.
 
 ### Transaction Signatures
 
-A transaction is signed with the random number `r` that was generated as the Src. A transaction is signed by generating `(h, I)` such that `H(hR + I) = h`. Note that this is trivial if you know `r`, as you can pick a desired `H(aG) = h`, and solve `h * r + b = a` to derive `I = bG`. It is easy to extend this to general signatures of a message `m` by requesting `(h, I)` such that `H(hR + I, m) = h`.
+A transaction is signed with the random number `r` that was generated as the `Src`. A transaction is signed by generating `(h, I)` such that `H(hR + I) = h`. Note that this is trivial if you know `r`, as you can pick a desired `H(aG) = h`, and solve `h * r + b = a` to derive `I = bG`. It is easy to extend this to general signatures of a message `m` by requesting `(h, I)` such that `H(hR + I, m) = h`.
 
 ### Generating transaction proofs
 
