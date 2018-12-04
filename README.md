@@ -1,18 +1,46 @@
 # Monereum
 
-## Description
+## What is Monereum
 
-This repository implements Monero with RingCT on top of the Ethereum blockchain.
+### Overview
 
-Monereum, like Monero, utilizes Borromean Ring Signatures as a method of authentication, Key Images to prevent double-spend attacks, and Pedersen Commitments to hide the amounts being spent (While still being able to check that they sum to zero). Range Proofs also utilize a borromean ring signature on each bit of the commitment to ensure that the commitment falls within a range that cannot overflow. All of these techniques are discussed in-depth within the Monero whitepaper, so they will not be discussed here.
+Monereum is an implementation of Monero, on top of the Ethereum blockchain. This allows a holder of Monereum coins to send Monereum between each other, without evesdroppers being able to decrypt these transactions. This is the goal of Monero, but does not allow interaction with dApps. Monereum exists to combine Ethereum's versatility with Monero's privacy, by implementing this functionality in Ethereum itself.
 
-Using your own Ethereum address for Monereum transactions would reveal who you are. Thus, transactions include a miner fee that is expected to be approximately equal to the gas cost of the transaction. A signed transaction is broadcasted publically behind a Tor connection, or a trusted web service that does not save IPs (Preferably the former for indisputable trustlessness). Then, a miner claims the fee by submitting the transaction for you.
+### Transactions
 
-While the range and ring proofs can be made within the block limit, they remain expensive. Therefore, transactions require the miner to post a 1 ETH bounty, along with an MNR bounty that's guaranteed to be at least 1/16th of the MNR being transferred (Deduced from highest bit of the range proofs). Open disputes are taken over the next 2 minutes, where disputing also requires posting a 1 ETH bounty. The winner of the dispute is awarded 0.5 ETH (And if the disputer wins he is awarded the MNR bounty as well). The ETH bounty is much higher than the gas price of the proof, and the MNR bounty guarantees that that a reporter will still report, even if someone tries attacking the network with very high gas prices. Overall, this system creates a situation where no one's legitimate transactions will be delayed by a false accusation, but all attempts to profitably create illegitimate transactions will be disputed.
+A transaction sends Monereum from someone who knows the private key of a Monereum coin, to a public address. The owner of the public address will now have the private key of the new Monereum coin, and no one else will have this private key. This is done in a way where no evesdropper can see the sender and the receiver, but any evesdropper can verify that the amount of coins spent equals the amount of coins generated. In fact, the receiver cannot see the sender either. Any evesdropper can also verify that the sender's coin was not spent twice.
 
-Additionally, anyone may hold a standard ERC20 Token of Monereum, including contracts. An encrypted version of a Monereum coin can be converted into an ERC20 Token easily, and vice-versa. This allows the entire realm of Turing-Complete opportunities to be applied in a way where those interacting with the contract remain private. Allowances can also be made to Monereum public addresses, so that transactions to/from the ERC20 version remain anonymous.
+The sender may generate a transaction receipt, to prove that he/she sent the transaction. If the transaction must be associated with a real-life result such as "Send a Laptop to 1234 Main St", then this message can be signed so that it can be proven that the sender approves of that message. Signatures are sent encrypted so that no one may read "Send a Laptop to 1234 Main St".
 
-A public address consists of 256-bit coordinates (X, Y), which can be written as 04XY, 03X if Y is odd, or 02X if Y is even. The format 01X is used if X is an ERC20 address.
+### Smart Contracts
+
+Transactions signatures allow Smart Contracts to easily accept anonymous funds, and then execute precisely what the user intended in response. Additionally, Smart Contracts will be able to easily send funds to Monereum public addresses.
+
+Any existing Ethereum contract can even be interacted with, while mainting privacy. This is done by simply paying gas fees in Monereum, as opposed to in Ethereum.
+
+### Keys
+
+Each public Monereum address consists of a public view address and a public spend address. The wallet owner has the view key and spend key for these addresses. You may give the view key to someone, and they will be able see incoming transactions, amounts, and verify transaction receipts from incoming transactions. The spend key, however, is required to spend the received coin. Any amount of public Monereum addresses can be created, so that they can given to Smart Contracts to receive funds.
+
+### Example Usage
+
+We can consider an example of interacting with existing Ethereum contracts that have no inherent support for Monereum. We will see that this is still rather easy.
+
+First, we may create a Monereum wallet, and purchase some Monereum with Ethereum or fiat. Now, we have the Monereum.
+
+We can then initiate a smart contract transaction by paying for the gas fees in Monereum. No one will be able to link the smart contract transaction with our initial purchase, or any othet smart contract transaction.
+
+This transaction can include buying Ethereum with the Monereum. Now, we have anonymous Ethereum.
+
+We may continue with sending several trades in with Augur, and collecting our winnings. Each transaction has its gas fees paid in Monereum.
+
+Then, we trade our final amount of Ethereum for Monereum.
+
+Finally, we sell the Monereum for fiat or Ethereum.
+
+Neither the purchase, nor the sale, can be associated with our Augur trading. With traditional Ethereum tranactions, everyone would be able to see exactly what you were doing the entire time you were trading with Augur. In this case, you've maintained your privacy. This is done while paying less than a dollar in transaction fees.
+
+This can be abstracted away, so that a user barely interacts with the Monereum or the Ethereum. They simply interact with Augur with knowledge that everything is private, and everything is decentralized. We now have have been able to successfully interact with a complex platform, without any dependency on a centralized exchange or provider, and with full privacy.
 
 ## Development Environment
 
@@ -26,9 +54,17 @@ You'll also have to execute `npm i` in the `./contracts` and `./www/js` director
 
 I believe whitepapers to be rather opaque, so I'm providing an explanation of the protocol in a way that should be easier to digest.
 
-### Keys
+### Description
 
-Each public address consists of a public view address and a public spend address. The wallet owner has the view key and spend key. You may give the view key (And public address) to someone, and they will be able see incoming transactions, amounts, and verify transaction receipts. The spend key, however, is required to spend the received coin.
+Monereum, like Monero, has Ring Proofs that utilize Borromean Ring Signatures as a method of authentication, Key Images to prevent double-spend attacks, and Pedersen Commitments to hide the amounts being spent (While still being able to check that they sum to zero). Range Proofs also utilize a borromean ring signature on each bit of the commitment to ensure that the commitment falls within a range that cannot overflow around the modulus. All of these techniques are discussed in-depth within the Monero whitepaper, so they will not be discussed here.
+
+Using your own Ethereum address for Monereum transactions would reveal who you are. Thus, transactions include a Monereum miner fee that is expected to be approximately equal to the gas cost of the transaction. A signed transaction is broadcasted publically behind a Tor connection, or a trusted web service that does not save IPs (Preferably the former for indisputable trustlessness). Then, a miner claims the fee by submitting the transaction for you.
+
+While the range and ring proofs can be made within the block limit, they remain expensive. Therefore, transactions require the miner to post a 1 ETH bounty, along with an MNR bounty that's guaranteed to be at least 1/16th of the MNR being transferred (Deduced from highest bit of the range proofs). Open disputes are taken over the next 2 minutes, where disputing also requires posting a 1 ETH bounty. The winner of the dispute is awarded 0.5 ETH (And if the disputer wins he is awarded the MNR bounty as well). The ETH bounty is much higher than the gas price of the proof, and the MNR bounty guarantees that that a reporter will still report, even if someone tries attacking the network with very high gas prices during an attempt to fabricate a larger amount of MNR. Overall, this system creates a situation where no one's legitimate transactions will be delayed by a false accusation, but all attempts to profitably create illegitimate transactions will be disputed.
+
+Additionally, anyone may hold a standard ERC20 Token of Monereum, including contracts. An encrypted version of a Monereum coin can be converted into an ERC20 Token easily, and vice-versa. This allows the entire realm of Turing-Complete opportunities to be applied in a way where those interacting with the contract remain private. Allowances can also be made to Monereum public addresses, so that transactions to/from the ERC20 version remain anonymous.
+
+A public address consists of 256-bit coordinates (X, Y), which can be written as 04XY, 03X if Y is odd, or 02X if Y is even. The format 01X is used if X is an ERC20 address.
 
 ### Commitments
 
@@ -149,11 +185,11 @@ It is also possible to allow deterministic generation of `r_i`, but outgoing tra
 
 ### Transaction Signatures
 
-A transaction is signed with the random number `r` that was generated as the `Src`. A transaction is signed by generating `(h, I)` such that `H(hR + I) = h`. Note that this is trivial if you know `r`, as you can pick a desired `H(aG) = h`, and solve `h * r + b = a` to derive `I = bG`. It is easy to extend this to signatures of a message `m` by requesting `(h, I)` such that `H(hR + I, m) = h`. Having the view key will not allow receipt generation; only having the mnemonic will allow receipt generation. In this case, `G = hashP(B)`, as opposed to the common base.
+A transaction is signed with the random number `r` that was generated as the `Src`. A transaction is signed by generating `(h, I)` such that `H(hR + I) = h`. Note that this is trivial if you know `r` such that `R = rG`, as you can pick a desired `H(aG) = h`, and solve `h * r + b = a` for `b` to derive `I = bG`. It is easy to extend this to signatures of a message `m` by creating `(h, I)` such that `H(hR + I, m) = h`. Having the view key will not allow receipt generation; only having the mnemonic will allow receipt generation. Note that in this case, `G = hashP(B)`, as opposed to the common base.
 
 ### Transaction Receipts
 
-A transaction receipt is simply a transaction signature with no message, so that only the wallet holder may generate receipts for outgoing transactions. The Diffie-Hellman exchange that occurs when agreeing upon `rA = aR` allows for easy obscurity. The transaction signature is XOR'ed with `hash(hash(aR) + 1) = hash(s + 1)` to create a transaction receipt, so that the receipt can be sent over an insecure channel without revealing the transaction. The holder of a view key may also verify receipts of received transactions, since they have access to the shared secret `s`.
+A transaction receipt is simply an encrypted transaction signature with no message, so that only the wallet holder may generate receipts for outgoing transactions. The Diffie-Hellman exchange that occurs when agreeing upon `rA = aR` allows for easy encryption where the receiver my decrypt it. The transaction signature is XOR'ed with `hash(hash(aR) + 1) = hash(s + 1)` to create a transaction receipt, so that the receipt can be sent over an insecure channel without revealing the transaction. The holder of a view key may also verify receipts of received transactions, since they have access to the shared secret `s`.
 
 ### Generating transaction proofs
 
