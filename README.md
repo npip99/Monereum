@@ -4,43 +4,29 @@
 
 ### Overview
 
-Monereum is an implementation of Monero, on top of the Ethereum blockchain. This allows a holder of Monereum coins to send Monereum between each other, without evesdroppers being able to decrypt these transactions. This is the goal of Monero, but does not allow interaction with dApps. Monereum exists to combine Ethereum's versatility with Monero's privacy, by implementing this functionality in Ethereum itself.
+Monereum is an implementation of Monero with RingCT, on top of the Ethereum blockchain. This allows a holder of Monereum coins to send Monereum between each other, without evesdroppers being able to decrypt these transactions. This is the goal of Monero, but does not allow interaction with dApps. Monereum exists to combine Ethereum's versatility with Monero's privacy, by implementing this functionality in Ethereum itself.
 
 ### Transactions
 
 A transaction sends Monereum from someone who knows the private key of a Monereum coin, to a public address. The owner of the public address will now have the private key of the new Monereum coin, and no one else will have this private key. This is done in a way where no evesdropper can see the sender and the receiver, but any evesdropper can verify that the amount of coins spent equals the amount of coins generated. In fact, the receiver cannot see the sender either. Any evesdropper can also verify that the sender's coin was not spent twice.
 
-The sender may generate a transaction receipt, to prove that he/she sent the transaction. If the transaction must be associated with a real-life result such as "Send a Laptop to 1234 Main St", then this message can be signed so that it can be proven that the sender approves of that message. Signatures are sent encrypted so that no one may read "Send a Laptop to 1234 Main St".
-
-### Smart Contracts
-
-Transactions signatures allow Smart Contracts to easily accept anonymous funds, and then execute precisely what the user intended in response. Additionally, Smart Contracts will be able to easily send funds to Monereum public addresses.
-
-Any existing Ethereum contract can even be interacted with, while mainting privacy. This is done by simply paying gas fees in Monereum, as opposed to in Ethereum.
+The sender may generate a transaction receipt, to prove that he/she sent the transaction. If the transaction must be associated with a real-life result such as "Send a Laptop to 1234 Main St", then this message can be signed so that it can be proven that the sender approves of that message. Signatures are sent encrypted so that no one may read "Send a Laptop to 1234 Main St", or know for what transaction a receipt is for.
 
 ### Keys
 
-Each public Monereum address consists of a public view address and a public spend address. The wallet owner has the view key and spend key for these addresses. You may give the view key to someone, and they will be able see incoming transactions, amounts, and verify transaction receipts from incoming transactions. The spend key, however, is required to spend the received coin. Any amount of public Monereum addresses can be created, so that they can given to Smart Contracts to receive funds.
+Each public Monereum address consists of a public view address and a public spend address. The wallet owner has the view key and spend key for these addresses. You may give the view key to someone, and they will be able see incoming transactions, amounts, and verify transaction receipts for incoming transactions. The spend key, however, is required to spend the received coin. Any amount of public Monereum addresses can be created, so that they can given to Smart Contracts to receive funds.
 
-### Example Usage
+### Smart Contracts
 
-We can consider an example of interacting with existing Ethereum contracts that have no inherent support for Monereum. We will see that this is still rather easy.
+Transactions signatures allow Smart Contracts to easily accept anonymous funds, and then execute precisely what the user intended in response. Additionally, Smart Contracts will be able to easily send funds to Monereum public addresses. In this way, dApps can maintain anonymity in each transaction. The MNR-ETH market implemented in this repository is an example of this.
 
-First, we may create a Monereum wallet, and purchase some Monereum with Ethereum or fiat. Now, we have the Monereum.
+### Backwards Compatibility
 
-We can then initiate a smart contract transaction by paying for the gas fees in Monereum. No one will be able to link the smart contract transaction with our initial purchase, or any othet smart contract transaction.
+Any existing Ethereum contract can even be interacted with, while still mainting privacy. This is done by paying gas fees in Monereum, as opposed to in Ethereum. If the same address is needed for long-term interactions, then you can trade Monereum in exchange for Ethereum sent to new anonymous Ethereum address. In this way, you can use your anonymous address normally. When you're done, you can swap back to Monereum and throw the old Ethereum address away. Both sides of these interactions are much easier, and much safer, than alternatives such as CoinJoin.
 
-This transaction can include buying Ethereum with the Monereum. Now, we have anonymous Ethereum.
+### ERC20 Support
 
-We may continue with sending several trades in with Augur, and collecting our winnings. Each transaction has its gas fees paid in Monereum.
-
-Then, we trade our final amount of Ethereum for Monereum.
-
-Finally, we sell the Monereum for fiat or Ethereum.
-
-Neither the purchase, nor the sale, can be associated with our Augur trading. With traditional Ethereum tranactions, everyone would be able to see exactly what you were doing the entire time you were trading with Augur. In this case, you've maintained your privacy. This is done while paying less than a dollar in transaction fees.
-
-This can be abstracted away, so that a user barely interacts with the Monereum or the Ethereum. They simply interact with Augur with knowledge that everything is private, and everything is decentralized. We now have have been able to successfully interact with a complex platform, without any dependency on a centralized exchange or provider, and with full privacy.
+Anyone may hold a standard ERC20 Token of Monereum - including contracts. An encrypted version of a Monereum coin can be converted into an ERC20 Token easily, and vice-versa. This allows the entire realm of Turing-Complete opportunities to be applied in a way where those interacting with the contract remain private. It also allows Monereum to maintain compatibility with ERC20 services. Monereum addresses can be used just like Ethereum addresses, while sending and receiving ERC20 tokens of Monereum.
 
 ## Development Environment
 
@@ -56,15 +42,13 @@ I believe whitepapers to be rather opaque, so I'm providing an explanation of th
 
 ### Description
 
-Monereum, like Monero, has Ring Proofs that utilize Borromean Ring Signatures as a method of authentication, Key Images to prevent double-spend attacks, and Pedersen Commitments to hide the amounts being spent (While still being able to check that they sum to zero). Range Proofs also utilize a borromean ring signature on each bit of the commitment to ensure that the commitment falls within a range that cannot overflow around the modulus. All of these techniques are discussed in-depth within the Monero whitepaper, so they will not be discussed here.
+Monereum, like Monero, has Ring Proofs that utilize Borromean Ring Signatures as a method of authentication, Key Images to prevent double-spend attacks, and Pedersen Commitments to hide the amounts being spent (While still being able to check that they sum to zero). Range Proofs also utilize a borromean ring signature on each bit of the commitment to ensure that the commitment falls within a range that cannot overflow around the modulus. All of these techniques are discussed in-depth within the CryptoNote and RingCT whitepapers.
 
-Using your own Ethereum address for Monereum transactions would reveal who you are. Thus, transactions include a Monereum miner fee that is expected to be approximately equal to the gas cost of the transaction. A signed transaction is broadcasted publically behind a Tor connection, or a trusted web service that does not save IPs (Preferably the former for indisputable trustlessness). Then, a miner claims the fee by submitting the transaction for you.
+Using your own Ethereum address for Monereum transactions would reveal who you are. Thus, transactions include a Monereum miner fee that is expected to be about equal to the gas cost of the transaction. A signed transaction is broadcasted publically behind a Tor connection, or a trusted web service that does not save IPs (Preferably the former for indisputable trustlessness). Then, a Monereum miner claims the fee by submitting the transaction for you onto the Ethereum network.
 
-While the range and ring proofs can be made within the block limit, they remain expensive. Therefore, transactions require the miner to post a 1 ETH bounty, along with an MNR bounty that's guaranteed to be at least 1/16th of the MNR being transferred (Deduced from highest bit of the range proofs). Open disputes are taken over the next 2 minutes, where disputing also requires posting a 1 ETH bounty. The winner of the dispute is awarded 0.5 ETH (And if the disputer wins he is awarded the MNR bounty as well). The ETH bounty is much higher than the gas price of the proof, and the MNR bounty guarantees that that a reporter will still report, even if someone tries attacking the network with very high gas prices during an attempt to fabricate a larger amount of MNR. Overall, this system creates a situation where no one's legitimate transactions will be delayed by a false accusation, but all attempts to profitably create illegitimate transactions will be disputed.
+While the range and ring proofs can be made within the block limit, they remain expensive. Therefore, transactions require the miner to post a 1 ETH bounty, along with an MNR bounty that's guaranteed to be at least 1/16th of the MNR being transferred (Deduced from highest bit of the range proofs). Open disputes are taken over the next 2 minutes, where disputing also requires posting a 1 ETH bounty. The winner of the dispute is awarded 0.5 ETH (And if the disputer wins he is awarded the MNR bounty as well). The ETH bounty is much higher than the gas price of the proof, so someone will eventually dispute bad transactions. The MNR bounty guarantees that it is unprofitable for an attacker to pay higher gas prices and bid out disputers, since the more MNR they try to fabricate, the more disputers are willing to pay in gas prices to claim the bounty. Overall, this system creates a situation where no one's legitimate transactions will be delayed by a false accusation, but all attempts to profitably create illegitimate transactions will be disputed.
 
-Additionally, anyone may hold a standard ERC20 Token of Monereum, including contracts. An encrypted version of a Monereum coin can be converted into an ERC20 Token easily, and vice-versa. This allows the entire realm of Turing-Complete opportunities to be applied in a way where those interacting with the contract remain private. Allowances can also be made to Monereum public addresses, so that transactions to/from the ERC20 version remain anonymous.
-
-A public address consists of 256-bit coordinates (X, Y), which can be written as 04XY, 03X if Y is odd, or 02X if Y is even. The format 01X is used if X is an ERC20 address.
+A public address consists of 256-bit coordinates (X, Y), which can be written as 04XY, 03X if Y is odd, or 02X if Y is even. The format 01Z is used if Z is an ERC20 address (Either Monereum or Ethereum).
 
 ### Commitments
 
@@ -94,29 +78,13 @@ Now, anyone may claim the bounty of an incorrect pending transaction by posting 
 
 At this point anyone may call a verification function with all of the proof data, which will then set the truth value of the proof's hash to true or false, based on the legitimacy of the proof. The one who believes he is correct will presumably call this function. If the proof is legitimate, then the one who called the verification function will be awarded 0.5 ETH. If the proof is illegitimate, the original disputer is awarded 0.5 ETH, and his 1 ETH bounty is returned. Then, the output coins are either marked Rejected or Pending based on the result of the dispute. The timer resets if the coins are set to Pending. The remaining 0.5 ETH disappears. An important aspect is that anyone may claim a false dispute's bounty, so that disputes on legitimate proofs will be reported quickly. However, only the disputer can claim a correct dispute. This way he feels safe spending gas to freeze the timer during times of high gas prices (Or an intentional attack on gas prices).
 
-After three times the pending time, anyone may claim axxn illegitimate proof's bounty. This way the Key Images that were marked for that transaction will then be freed, for the actual owner to spend them properly.
+After four times the pending time, anyone may claim an illegitimate proof's bounty. This way the Key Images that were marked for that transaction will then be freed, for the actual owner to spend them properly.
 
 Though the disputer posts a 1 ETH bounty, this isn't necessary. It is only added for practical reasons of reducing false dispute percentages.
 
 When the timer is complete, anyone can commit the output coins. Upon commiting the output coins, the coins are then "Accepted", and no further disputes are possible. Additionally, the miner's 1 ETH bounty is returned. However, if two times the pending time has elapsed, then the next person who commits the output coins may claim the miner's bounty. This forces a transaction to resolve quickly.
 
-We destroy 0.5 ETH upon a dispute to disincentivize disputing with oneself to delay a transaction. Additionally, the proving is separated from the disputing as proving is expensive. It is important that the initial dispute is cheap so that disputes may still be made during gas price attacks, while still keeping the miner's bounty as low as possible.
-
-### ERC20 Transactions
-
-ERC20 tokens are versatile, but care must be taken when converting to and from Monero coins, since ERC20 transactions are entirely transparent.
-
-Turning an ERC20 token into encrypted Monero simply requires the sender to have the allotted allowance. Note that amount cannot be encrypted as it must be deducted from the balance, but this is not relevant as spending the token will always be hidden in a ring.
-
-Note: It is possible to hide all balances as pedersen commitments, but this would make the `balanceOf` operation impossible. I would like to eventually see an Monereum compatible implementation of a quasi-ERC20 token that hides balances, however.
-
-Turning an encrypted Monereum coin into an ERC20 token requires signing the coin with the key image, which gets verified on the spot. This is of course revealing, so wallet implementations need to ensure that only funds that have been self-mixed are used. The self-mixing should be entirely abstracted away. Note that using "spare change" is not self-mixing, since if a previous transaction involving sending coin A to someone, with a spare change coin B, then the owner of A will be able to see when you turn B into an ERC20 token. This would reveal yourself to the owner of A.
-
-Additionally, the Pedersen Blinding Key must be revealed when ERC20 tokens are being turned into Monereum coins. This way the commitment amount may be verified (And will of course be publically visible). This will not allow others to generate receipts or see the receiver, however.
-
-### ERC20 Allowances to Monereum Addresses
-
-Allowances may also be made to Monereum public addresses, allowing them to spend your token by signing the transaction with their private key. This uses the miner fee model, so that an ethereum address is not required.
+We destroy 0.5 ETH upon a dispute to disincentivize disputing with oneself to delay a transaction. Additionally, the proving is separated from the disputing as proving is expensive. It is important that the initial dispute is cheap so that disputes may still be made during gas price attacks, while still trying to keep the miner's bounty as low as possible.
 
 ### Transaction Cancelling
 
@@ -127,6 +95,24 @@ If a miner fee was too low, a transaction is cancelled by simply sending coins t
 ### Transaction Receipts
 
 Every output coin will come with a receipt that you may send to the receiver. Anyone else who views the receipt will not be able to figure out which transaction the receipt belongs to. However, anyone with the view key of the receiver can verify that only the person who sent the transaction could have generated the receipt.
+
+### Smart Contract Transactions
+
+Smart Contracts are versatile, but wallets must be careful when converting to and from Monereum coins, since Ethereum transactions are entirely transparent.
+
+Sending an encrypted Monereum coin to a smart contract requires signing the coin with the key image, which gets verified on the spot. This is of course revealing, so wallet implementations need to ensure that only funds that have been self-mixed are used. The self-mixing should be entirely abstracted away. Note that using "spare change" is not self-mixing, since if a previous transaction involving sending coin A to someone, with a spare change coin B, then the owner of A will be able to see when you try using B. This would reveal yourself to the owner of A.
+
+In order to prevent other smart contracts from stealing coins, sending Monereum to smart contracts also requires signing the coin with the address of the contract, and any data that the contract wants signed (Data that would encode what you want the smart contract to do). It's the smart contract's responsibility to honor the data that was signed, and such smart contracts should be open source so that all can verify that it will do what is desired. In order to allow the smart contract to respond to such submissions, this transaction data is actually sent to the smart contract itself. The smart contract then submits the signature to the Monereum contract, which will then increase the smart contract's balance along with verifying the signature against the key image, provided data, and `msg.sender`. The smart contract provides the data based on what function was called and with what parameters.
+
+Receiving a Monereum coin involves the smart contract minting new Monereum coins. This is done at the discretion of the smart contract.
+
+Additionally, the Pedersen Blinding Key must be revealed when smart contracts are minting or receiving Monereum coins. This way the commitment amount may be verified (And will of course be publically visible). This will not allow others to generate receipts or see the receiver, however.
+
+The Monereum contract itself keeps track of all Monereum coins sent to and minted by a smart contract, so that a smart contract does not mint more than it consumes.
+
+### ERC20 Monereum Addresses
+
+Backwards compatibility involves allowing Monereum Addresses to look like Ethereum addresses. This is done by providing a hash of the desired destination address, and allowing that to be an ERC20 "Ethereum" address (Ethereum also uses hashes of ECC Points, so we prepend the word "Monereum" before hashing to prevent collisions). They can then be transferred back into Monereum by signing the transaction with the private key of that address.
 
 ### Properties of Monereum
 
