@@ -246,8 +246,19 @@ class NativeBigIntClass {
     }
   }
 
+  bitLength() {
+    if (this.value == 0) {
+      return 0
+    }
+    return this.toArray(2).value.length
+  }
+
   toJSON() {
     return this.toString()
+  }
+
+  toJSNumber() {
+    return Number(this.value)
   }
 }
 
@@ -263,7 +274,7 @@ NativeBigInt.randBetween = NativeBigIntClass.randBetween
 for(let i = -10; i < 10; i++) {
   NativeBigInt[i] = NativeBigInt(i)
 }
-
+/*
 s = performance.now()
 sum = bigInt(5)
 for (let i = 0; i < 10; i++) {
@@ -271,7 +282,7 @@ for (let i = 0; i < 10; i++) {
 }
 e = performance.now()
 console.log("bigInt: ", (e - s)/10)
-
+*/
 bigInt = NativeBigInt
 s = performance.now()
 sum = NativeBigInt(5)
@@ -378,7 +389,7 @@ class ECCPoint {
         const p = ECCPoint.p
         const x = this.x
         const y = this.y
-        const zz = this.zz || (this.zz = this.z.square())
+        const zz = this.z.square()
         const z6 = zz.square().times(zz)
         return y.square().minus(x.square().times(x).plus(z6.times(3))).mod(p).eq(bigInt[0]);
     }
@@ -453,7 +464,7 @@ class ECCPoint {
     }
 
     // 30ms first time, 13ms all other times
-    savedTimes(s) {
+    basicTimes(s) {
         if (this.isInf()) {
           return ECCPoint.zero
         }
@@ -470,10 +481,68 @@ class ECCPoint {
         return ans;
     }
 
+    // this.table[...dcba] = ... + d2^96P + c2^64P + b2^32P + aP
+		computeTable() {
+      // pows = [P, 2^32 * P, 2^64 * P, ...]
+			const pows = [this]
+			for (let i = 1; i < ECCPoint.combWidth; i++) {
+        let next = pows[pows.length - 1]
+        for (let j = 0; j < Math.ceil(256 / ECCPoint.combWidth); j++) {
+          next = next.double()
+        }
+        pows.push(next)
+			}
+      this.table = [ECCPoint.zero]
+      for (let i = 1; i < (1 << ECCPoint.combWidth); i++) {
+        // this.table[1X] = 2^(32*len(X))P + X_0 * 2^(32*(len(X) - 1))P + ... = 2^(32*len(X))P + this.table[X]
+        const bin = i.toString(2)
+        const newDigit = bin.length - 1
+        const rest = bin.slice(1) || "0"
+        this.table.push(this.table[parseInt(rest, 2)].plus(pows[newDigit]))
+      }
+		}
+
+		// Assumes 0 < s < p
+		combTimes(s) {
+			if (!this.table) {
+				this.computeTable()
+			}
+			let bin = s.toArray(2).value.reverse()
+      // Explanation assuming combWidth = 5, log2(s) = 20
+      // s = 11010100101001010111_2
+      // =>
+      // 1101 0100 1010 0101 0111
+      // =>
+      // 0111 * 2^0 +
+      // 0101 * 2^4 +
+      // 1010 * 2^8 +
+      // 0100 * 2^12 +
+      // 1101 * 2^16
+      // C_1, Column 1: (2^16 + 0 + 2^8 + 0 + 0)P = this.table[10100]
+      // C_2, Column 2: (2^16 + 2^12 + 0 + 2^4 + 2^0)P = this.table[11011]
+      // ...
+      // Ans = C_1 * 2^3 + C_2 * 2^2 + C_3 * 2^1 + C_4
+      const numColumns = Math.ceil(256 / ECCPoint.combWidth)
+			let ans = ECCPoint.zero
+			for (let i = numColumns - 1; i >= 0; i--) {
+        ans = ans.double()
+
+        let combIndex = 0
+        for (let j = 0; j < ECCPoint.combWidth; j++) {
+          if (bin[i + j * numColumns]) {
+            combIndex += (1 << j)
+          }
+        }
+        const combValue = this.table[combIndex]
+				ans = ans.plus(combValue)
+			}
+			return ans
+		}
+
     // 15ms every time
     times(s) {
       if (this.useSave) {
-        return this.savedTimes(s)
+        return this.basicTimes(s)
       }
       if (this.isInf()) {
         return ECCPoint.zero
@@ -482,6 +551,11 @@ class ECCPoint {
       if (s.isZero()) {
         return ECCPoint.zero
       }
+      if (this.useComb) {
+        return this.combTimes(s)
+      }
+
+			// Solving the below:
       // [k, 0] = b1[v1[0], v1[1]], b2[v2[0], v2[1]]
       // k = b1*v1[0] + b2*v2[0]
       // 0 = b1*v1[1] + b2*v2[1]
@@ -491,23 +565,65 @@ class ECCPoint {
       // k / (-v2[1] / v1[1] * v1[0] + v2[0]) = b2
       // k * v1[1] / (-v2[1] * v1[0] + v2[0] * v1[1]) = b2
       // k * v2[1] / (-v1[1] * v2[0] + v1[0] * v2[1]) = b1
+			// =>
+			// b1 = k * v2[1] / (-v1[1] * v2[0] + v1[0] * v2[1])
+			// b2 = k * v1[1] / (-v2[1] * v1[0] + v2[0] * v1[1])
+			// Then, we round to the nearest integer
+
       const v1 = ECCPoint.v1
       const v2 = ECCPoint.v2
-      let divmod = s.times(v2[1]).divmod(ECCPoint.cross.times(-1))
-      if (divmod.remainder.abs().gt(ECCPoint.cross.shiftRight(1))) {
+			const cross = ECCPoint.cross
+      const half = cross.abs().shiftRight(1)
+
+			// Calculate b1
+      let divmod = s.times(v2[1]).divmod(cross.times(-1))
+      // console.log(divmod.quotient.toString())
+      // console.log("Check: ", divmod.remainder.toString(), cross.toString())
+      // console.log("Done: ", divmod.remainder.times(1000).over(cross).toJSNumber() / 1000)
+      if (divmod.remainder.abs().gt(half)) {
         let round = divmod.quotient.isNegative() ? bigInt[-1] : bigInt[1]
         divmod.quotient = divmod.quotient.plus(round)
+        //console.log("Done: ", divmod.remainder.times(1000).over(cross).toJSNumber() / 1000)
       }
       const b1 = divmod.quotient
-      divmod = s.times(v1[1]).divmod(ECCPoint.cross)
-      if (divmod.remainder.abs().gt(ECCPoint.cross.shiftRight(1))) {
+
+			// Calculate b2
+      divmod = s.times(v1[1]).divmod(cross)
+      if (divmod.remainder.abs().gt(half)) {
         let round = divmod.quotient.isNegative() ? bigInt[-1] : bigInt[1]
         divmod.quotient = divmod.quotient.plus(round)
+        //console.log(divmod.remainder.times(1000).over(cross).toJSNumber() / 1000)
       }
       const b2 = divmod.quotient
+
+			// Solve for k1, k2
       const v = [b1.times(v1[0]).plus(b2.times(v2[0])), b1.times(v1[1]).plus(b2.times(v2[1]))]
       const k1 = s.minus(v[0])
       const k2 = bigInt[0].minus(v[1])
+
+      // ||u|| <= ||d
+      //console.log(v2[0].bitLength(), v2[1].bitLength())
+
+      //console.log(k1.bitLength(), k2.bitLength())
+
+			// L1P = this.times(ECCPoint.L1), because math
+      const L1P = new ECCPoint(this.x.times(ECCPoint.cb2), this.y, this.z)
+
+			// Prepare binary representation of k1 & k2
+      let k1bin = k1.abs().toArray(4).value
+      let k2bin = k2.abs().toArray(4).value
+      const diff = k2bin.length - k1bin.length
+      if (diff > 0) {
+        k1bin = Array(diff).fill(0).concat(k1bin)
+      } else {
+        k2bin = Array(-diff).fill(0).concat(k2bin)
+      }
+
+			// arr =
+      // 0, a, 2a, 3a
+      // b, b+a, b+2a, b+3a
+      // 2b, 2b+a, 2b+2a, 2b+3a
+      // 3b, 3b+a, 3b+2a, 3b+3a
 
       const arr = [ECCPoint.zero]
       if (k1.isNegative()) {
@@ -518,42 +634,40 @@ class ECCPoint {
       arr.push(arr[arr.length - 1].double())
       arr.push(arr[arr.length - 1].plus(arr[arr.length-2]))
 
-      // 0, a, 2a, 3a
-      // b, b+a, b+2a, b+3a
-      // 2b, 2b+a, 2b+2a, 2b+3a
-      // 3b, 3b+a, 3b+2a, 3b+3a
       for (let i = 1; i < 4; i++ ) {
-        const ia = arr[i]
-        // This equals ia.times(L1)
-        arr.push(new ECCPoint(ia.x.times(ECCPoint.cb2).mod(p), ia.y, ia.z))
-        if (k1.isNegative()) {
-          ia.y = ia.y.times(-1)
-        }
-        if (k2.isNegative()) {
-          ia.y = ia.y.times(-1)
+        if (i == 1) {
+          if (k2.isNegative()) {
+            arr.push(new ECCPoint(L1P.x, L1P.y.times(-1), L1P.z))
+          } else {
+            arr.push(L1P)
+          }
+        } else if (i == 2) {
+          arr.push(arr[arr.length - 4].double())
+        } else {
+          arr.push(arr[arr.length - 4].plus(arr[4]))
         }
         arr.push(arr[arr.length - 1].plus(arr[1]))
         arr.push(arr[arr.length - 2].plus(arr[2]))
         arr.push(arr[arr.length - 3].plus(arr[3]))
       }
-      let bink1 = k1.abs().toArray(4).value
-      let bink2 = k2.abs().toArray(4).value
-      const diff = bink2.length - bink1.length
-      if (diff > 0) {
-        bink1 = Array(diff).fill(0).concat(bink1)
-      } else {
-        bink2 = Array(-diff).fill(0).concat(bink2)
-      }
+
+			// Calculate using the below algorithm:
+      //   2 * (2 * (2 * (0) + 0) + A) + A
+      // + 2 * (2 * (2 * (B) + 0) + B) + 0
+      // = 2 * (2 * (2 * (B) + 0) + (A+B)) + A
+			// In this case, A = this, B = this.times(L1) = L1P
+			// Additionally, we use base 4 as opposed to binary
       let ans = ECCPoint.zero
-      for( let i = 0; i < Math.max(bink1.length, bink2.length); i++ ) {
+      for( let i = 0; i < Math.max(k1bin.length, k2bin.length); i++ ) {
         ans = ans.double().double()
-        let ind = bink1[i] + 4 * bink2[i]
-        ans = ans.plus(arr[ind])
+        let ind = k1bin[i] + 4 * k2bin[i]
+        if (ind > 0) {
+          ans = ans.plus(arr[ind])
+        }
       }
-      /*if (ans.neq(this.saveTimes(s))) {
-        console.log("BAD")
-        throw "BAD"
-      }*/
+      //if (ans.neq(this.basicTimes(s))) {
+        // throw "Bad"
+      //}
       //   2 * (2 * (2 * (A) + 0) + A) + A
       // + 2 * (2 * (2 * (0) + B) + B) + 0
       // = 2 * (2 * (2 * (A) + B) + (A+B)) + A
@@ -612,6 +726,7 @@ for (let i = 1; i < 20; i++) {
   }
 }
 ECCPoint.zero = new ECCPoint(1, 1, 0);
+ECCPoint.combWidth = 8;
 console.log("TESTING")
 
 p = ECCPoint.p
@@ -636,6 +751,9 @@ s = [bigInt[1], bigInt[0]]
 t = [bigInt[0], bigInt[1]]
 r = [ECCPoint.q, lam1]
 
+// a * q + t * l = r
+// (r, -t)
+// a * q + t * l + t^2 * l = r
 len = 2
 while( !r[len - 1].isZero() ) {
   const divmod = r[len - 2].divmod(r[len - 1])
@@ -657,6 +775,7 @@ for (let i = len - 1; i >= 0; i--) {
     break
   }
 }
+
 ECCPoint.v1 = v1
 ECCPoint.v2 = v2
 // (-v2[1] * v1[0] + v2[0] * v1[1])
@@ -712,6 +831,11 @@ v8delay = 15
 
 // Performance will scale based on your hardware
 
+nums = []
+for (let i = 0; i < 200; i++) {
+  nums.push(bigInt.randBetween(10, bigInt[1].shiftLeft(256)))
+}
+
 // 0.28ms
 ac = bigInt[2]
 for (let i = 0; i < 1000; i++) {
@@ -738,43 +862,70 @@ for (let i = 0; i < 100; i++) {
   if (i == v8delay) {
     start = performance.now()
   }
-  calc = bigInt(hashCode(2 + i + "")).modInv(ECCPoint.p)
+  calc = bigInt(nums[i]).modInv(ECCPoint.p)
 }
 end = performance.now()
 console.log("MOD INV P: ", (end - start) / (100 - v8delay))
 
-// 2.33ms
+// 2.7ms
 for (let i = 0; i < 150; i++) {
   if (i == v8delay) {
     start = performance.now()
   }
-  calc = ECCPoint.g.times(num1)
+  calc = ECCPoint.g.times(nums[i])
+  //ECCPoint.g.dub = undefined
 }
 end = performance.now()
 console.log("TIMES: ", (end - start) / (150 - v8delay))
 
-// 4ms
+// 6ms
 ECCPoint.g.useSave = true
 for (let i = 0; i < 150; i++) {
   if (i == v8delay) {
     start = performance.now()
   }
-  calc = ECCPoint.g.times(num2)
+  calc = ECCPoint.g.times(nums[i])
   ECCPoint.g.dub = undefined
 }
 end = performance.now()
 console.log("SAVE TIMES INIT: ", (end - start) / (150 - v8delay))
 
-// 1.7ms
+// 2.2ms
 ECCPoint.g.useSave = true
 for (let i = 0; i < 150; i++) {
   if (i == v8delay) {
     start = performance.now()
   }
-  calc = ECCPoint.g.times(num2)
+  calc = ECCPoint.g.times(nums[i])
 }
 end = performance.now()
 console.log("SAVE TIMES RECUR: ", (end - start) / (150 - v8delay))
+
+// 1.3ms
+ECCPoint.g.useSave = false
+ECCPoint.g.useComb = true
+for (let i = 0; i < 150; i++) {
+  if (i == v8delay) {
+    start = performance.now()
+  }
+  calc = ECCPoint.g.times(nums[i])
+  //ECCPoint.g.dub = undefined
+  //ECCPoint.g.dub =
+}
+end = performance.now()
+console.log("COMB TIMES: ", (end - start) / (150 - v8delay))
+
+// 7.8ms
+for (let i = 0; i < 150; i++) {
+  if (i == v8delay) {
+    start = performance.now()
+  }
+  calc = ECCPoint.g.times(nums[i])
+  ECCPoint.g.table = undefined
+  ECCPoint.g.dub = undefined
+}
+end = performance.now()
+console.log("COMB TIMES INIT: ", (end - start) / (150 - v8delay))
 
 // 1.7ms
 for (let i = 0; i < 150; i++) {

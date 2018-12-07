@@ -46,6 +46,7 @@ class ECCPoint {
 				if (this.x.eq(0) && this.y.eq(0)) {
 					this.z = bigInt[0]
 				}
+				this.uses = 0
     }
 
 		hashInP() {
@@ -147,11 +148,8 @@ class ECCPoint {
     }
 
 		double() {
-			if (this.dub) {
-				return this.dub
-			}
 			if (this.isInf()) {
-				return this.dub = ECCPoint.zero
+				return ECCPoint.zero
 			}
 			const p = ECCPoint.p
 			const x2 = this.x.square()
@@ -163,30 +161,9 @@ class ECCPoint {
 			const x = m.square().minus(s.shiftLeft(1)).mod(p)
 			const y = m.times(s.minus(x)).minus(y2.square().shiftLeft(3)).mod(p)
 			const z = this.y.plus(this.z).square().minus(y2).minus(z2).mod(p)
-			this.dub = new ECCPoint(x, y, z);
-			if (this.useSave) {
-				this.dub.affine()
-			}
-			return this.dub;
+			return new ECCPoint(x, y, z);
 		}
-		
-		// Assumes !this.isInf() && 0 < s < q
-		
-		// 31ms first time, 14ms each additional time
-    savedTimes(s) {
-        let bin = s.toArray(2).value
-        let ans = ECCPoint.zero
-        let pow = this
-        for( let i = bin.length - 1; i >= 0; i-- ) {
-						if (bin[i] === 1) {
-							ans = ans.plus(pow)
-						}
-            pow = pow.double()
-        }
-        return ans;
-    }
-		
-		// 17ms each time
+
     times(s) {
 			if (this.isInf()) {
 				return ECCPoint.zero
@@ -195,11 +172,135 @@ class ECCPoint {
 			if (s.isZero()) {
 				return ECCPoint.zero
 			}
-      if (this.useSave) {
-        return this.savedTimes(s)
+			this.uses++
+      if (this.uses > 5) {
+        return this.combTimes(s)
+      } else {
+				return this.endoTimes(s)
+			}
+		}
+
+		affine() {
+			if (this.isInf()) {
+				// this.x = bigInt[0]
+				// this.y = bigInt[0]
+				return ECCPoint.zero
+			}
+			const p = ECCPoint.p
+			const zinv = this.z.modInv(p)
+			const zinv2 = zinv.times(zinv)
+			const zinv3 = zinv2.times(zinv)
+			let x = this.x.times(zinv2).mod(p)
+			if (x.isNegative()) {
+				x = x.plus(p)
+			}
+			let y = this.y.times(zinv3).mod(p)
+			if (y.isNegative()) {
+				y = y.plus(p)
+			}
+			// this.x = x
+			// this.y = y
+			// this.z = bigInt[1]
+			return new ECCPoint(x, y, bigInt[1]);
+		}
+
+    toString() {
+			const aff = this.affine()
+    	return "ECCPoint(" + aff.x.toString() + ", " + aff.y.toString() + ")"
+    }
+
+		toJSON() {
+			const aff = this.affine()
+			return {
+				x: aff.x.toString(),
+				y: aff.y.toString()
+			}
+		}
+
+		// === Multiplication Algorithms ===
+
+		// 5ms first time, 2.3ms if .double()'s are saved
+		basicTimes(s) {
+				let bin = s.toArray(2).value
+				let ans = ECCPoint.zero
+				let pow = this
+				for( let i = bin.length - 1; i >= 0; i-- ) {
+						if (bin[i] === 1) {
+							ans = ans.plus(pow)
+						}
+						pow = pow.double()
+				}
+				return ans;
+		}
+
+    // this.table[...dcba] = ... + d2^96P + c2^64P + b2^32P + aP
+		computeTable() {
+      // pows = [P, 2^32 * P, 2^64 * P, ...]
+			const pows = [this]
+			for (let i = 1; i < ECCPoint.combWidth; i++) {
+        let next = pows[pows.length - 1]
+        for (let j = 0; j < Math.ceil(256 / ECCPoint.combWidth); j++) {
+          next = next.double()
+        }
+        pows.push(next)
+			}
+      this.table = [ECCPoint.zero]
+      for (let i = 1; i < (1 << ECCPoint.combWidth); i++) {
+        // this.table[1X] = 2^(32*len(X))P + X_0 * 2^(32*(len(X) - 1))P + ... = 2^(32*len(X))P + this.table[X]
+        const bin = i.toString(2)
+        const newDigit = bin.length - 1
+        const rest = bin.slice(1) || "0"
+        this.table.push(this.table[parseInt(rest, 2)].plus(pows[newDigit]))
       }
-			
-			// Solving the below:
+		}
+
+		// 8ms first time, 1.1ms each additional time
+		combTimes(s) {
+			// Assumes 0 < s < p && !this.isInf()
+			if (!this.table) {
+				this.computeTable()
+			}
+			let bin = s.toArray(2).value.reverse()
+      // Explanation assuming combWidth = 5, log2(s) = 20
+      // s = 11010100101001010111_2
+      // =>
+      // 1101 0100 1010 0101 0111
+      // =>
+      // 0111 * 2^0 +
+      // 0101 * 2^4 +
+      // 1010 * 2^8 +
+      // 0100 * 2^12 +
+      // 1101 * 2^16
+      // C_1, Column 1: (2^16 + 0 + 2^8 + 0 + 0)P = this.table[10100]
+      // C_2, Column 2: (2^16 + 2^12 + 0 + 2^4 + 2^0)P = this.table[11011]
+      // ...
+      // Ans = C_1 * 2^3 + C_2 * 2^2 + C_3 * 2^1 + C_4
+      const numColumns = Math.ceil(256 / ECCPoint.combWidth)
+			let ans = ECCPoint.zero
+			for (let i = numColumns - 1; i >= 0; i--) {
+        ans = ans.double()
+
+        let combIndex = 0
+        for (let j = 0; j < ECCPoint.combWidth; j++) {
+          if (bin[i + j * numColumns]) {
+            combIndex += (1 << j)
+          }
+        }
+        const combValue = this.table[combIndex]
+				ans = ans.plus(combValue)
+			}
+			return ans
+		}
+
+		// 2.8ms each time
+		endoTimes(s) {
+			// Assumes 0 < s < p && !this.isInf()
+      const v1 = ECCPoint.v1
+      const v2 = ECCPoint.v2
+			const cross = ECCPoint.cross
+			const half = cross.abs().shiftRight()
+
+			// First we solve the below:
       // [k, 0] = b1[v1[0], v1[1]], b2[v2[0], v2[1]]
       // k = b1*v1[0] + b2*v2[0]
       // 0 = b1*v1[1] + b2*v2[1]
@@ -213,41 +314,38 @@ class ECCPoint {
 			// b1 = k * v2[1] / (-v1[1] * v2[0] + v1[0] * v2[1])
 			// b2 = k * v1[1] / (-v2[1] * v1[0] + v2[0] * v1[1])
 			// Then, we round to the nearest integer
-			
-      const v1 = ECCPoint.v1
-      const v2 = ECCPoint.v2
-			const cross = ECCPoint.cross
-			
+			// Here, cross = (-v2[1] * v1[0] + v2[0] * v1[1])
+
 			// Calculate b1
       let divmod = s.times(v2[1]).divmod(cross.times(-1))
-      if (divmod.remainder.abs().gt(cross.shiftRight(1))) {
+      if (divmod.remainder.abs().gt(half)) {
         let round = divmod.quotient.isNegative() ? bigInt[-1] : bigInt[1]
         divmod.quotient = divmod.quotient.plus(round)
       }
       const b1 = divmod.quotient
-			
+
 			// Calculate b2
       divmod = s.times(v1[1]).divmod(cross)
-      if (divmod.remainder.abs().gt(cross.shiftRight(1))) {
+      if (divmod.remainder.abs().gt(half)) {
         let round = divmod.quotient.isNegative() ? bigInt[-1] : bigInt[1]
         divmod.quotient = divmod.quotient.plus(round)
       }
       const b2 = divmod.quotient
-			
+
 			// Solve for k1, k2
       const v = [b1.times(v1[0]).plus(b2.times(v2[0])), b1.times(v1[1]).plus(b2.times(v2[1]))]
       const k1 = s.minus(v[0])
       const k2 = bigInt[0].minus(v[1])
-			
+
 			// L1P = this.times(ECCPoint.L1), because math
       const L1P = new ECCPoint(this.x.times(ECCPoint.cb2), this.y, this.z)
-			
+
 			// arr =
       // 0, a, 2a, 3a
       // b, b+a, b+2a, b+3a
       // 2b, 2b+a, 2b+2a, 2b+3a
       // 3b, 3b+a, 3b+2a, 3b+3a
-			
+
       const arr = [ECCPoint.zero]
       if (k1.isNegative()) {
         arr.push(new ECCPoint(this.x, this.y.times(-1), this.z))
@@ -256,7 +354,7 @@ class ECCPoint {
       }
       arr.push(arr[arr.length - 1].double())
       arr.push(arr[arr.length - 1].plus(arr[arr.length-2]))
-			
+
       for (let i = 1; i < 4; i++ ) {
         if (i == 1) {
           if (k2.isNegative()) {
@@ -273,7 +371,7 @@ class ECCPoint {
         arr.push(arr[arr.length - 2].plus(arr[2]))
         arr.push(arr[arr.length - 3].plus(arr[3]))
       }
-			
+
 			// Prepare binary representation of k1 & k2
       let k1bin = k1.abs().toArray(4).value
       let k2bin = k2.abs().toArray(4).value
@@ -283,7 +381,7 @@ class ECCPoint {
       } else {
         k2bin = Array(-diff).fill(0).concat(k2bin)
       }
-			
+
 			// Calculate using the below algorithm:
       //   2 * (2 * (2 * (0) + 0) + A) + A
       // + 2 * (2 * (2 * (B) + 0) + B) + 0
@@ -300,49 +398,14 @@ class ECCPoint {
       }
       return ans
     }
-
-		affine() {
-			if (this.isInf()) {
-				this.x = bigInt[0]
-				this.y = bigInt[0]
-				return this
-			}
-			const p = ECCPoint.p
-			const zinv = this.z.modInv(p)
-			const zinv2 = zinv.times(zinv)
-			const zinv3 = zinv2.times(zinv)
-			let x = this.x.times(zinv2).mod(p)
-			if (x.isNegative()) {
-				x = x.plus(p)
-			}
-			let y = this.y.times(zinv3).mod(p)
-			if (y.isNegative()) {
-				y = y.plus(p)
-			}
-			this.x = x
-			this.y = y
-			this.z = bigInt[1]
-			return this;
-		}
-
-    toString() {
-			const aff = this.affine()
-    	return "ECCPoint(" + aff.x.toString() + ", " + aff.y.toString() + ")"
-    }
-
-		toJSON() {
-			const aff = this.affine()
-			return {
-				x: aff.x.toString(),
-				y: aff.y.toString()
-			}
-		}
 }
 
 // === Set parameters ===
 ECCPoint.p = bigInt("21888242871839275222246405745257275088696311157297823662689037894645226208583");
 ECCPoint.q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
 ECCPoint.zero = new ECCPoint(1, 1, 0);
+
+ECCPoint.combWidth = 8
 
 // === Precalculate for fast multiplication ===
 // Read more here: https://www.iacr.org/archive/crypto2001/21390189.pdf
@@ -360,7 +423,7 @@ if (!L1.square().plus(L1).plus(1).mod(ECCPoint.q).eq(0)) {
 // const cb1 = bigInt[3].modPow(p.minus(1).over(3), p)
 const cb2 = ECCPoint.cb2 = bigInt[3].modPow(ECCPoint.p.minus(1).over(3).times(2), ECCPoint.p)
 
-if (!cb2.modPow(3, ECCPoint.p)) {
+if (cb2.modPow(3, ECCPoint.p).neq(1)) {
 	throw "Bad cb2"
 }
 

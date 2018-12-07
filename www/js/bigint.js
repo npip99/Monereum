@@ -225,8 +225,22 @@ class NativeBigIntClass {
     }
   }
 
+  bitLength() {
+    if (this.value == 0) {
+      return 0
+    }
+    return this.toArray(2).value.length
+  }
+
   toJSON() {
     return this.toString()
+  }
+
+  toJSNumber() {
+    if (this.abs().value < Number.MAX_SAFE_INTEGER) {
+      throw "Value does not fit in a Javascript integer"
+    }
+    return Number(this.value)
   }
 }
 
@@ -244,12 +258,5 @@ if (BigInt !== undefined) {
     NativeBigInt[i] = NativeBigInt(i)
   }
 }
-
-console.log(NativeBigInt(5).modInv(7))
-
-console.log(bigInt(10).toArray(2))
-
-console.log(NativeBigInt(50000).toString(16))
-console.log(JSON.stringify({"A": NativeBigInt(5)}))
 
 module.exports = (BigInt === undefined) ? bigInt : NativeBigInt
