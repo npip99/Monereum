@@ -9,27 +9,27 @@ class TXHandler {
   constructor(wallet, web3) {
     this.wallet = wallet
     this.web3 = web3
-    
+
     // block number
     this.position = 0
     this.doneSyncing = true
-    
-    // received tx IDs that are confirmed with block <= this.position
+
+    // received tx IDs that are confirmed
     this.funds = []
-    
+
     // keyImage: string(Point)
     // =>
     // bool, whether or not the keyImage was used
     this.keyImages = {}
-    
-    // objectID: string(bigInt)
+
+    // destHash (ID): string(bigInt)
     // =>
     // tx: object
     // ringGroupHash: bigInt
     // isValid: bool, whether or not all ring proofs and range proofs are valid
     // confirmed: int, The blockNumber of the ring group submission
     this.transactions = {}
-    
+
     // ringGroupHash: string(bigInt)
     // =>
     // ringGroup: object
@@ -38,21 +38,21 @@ class TXHandler {
     // isValid: bool, whether or not all ring proofs and range proofs are valid
     // confirmed: int, The blockNumber of the ring group submission
     this.ringGroups = {}
-    
+
     // ringHash: string(bigInt)
     // =>
     // ringGroupHash: bigInt
     this.ringToRingGroup = {}
   }
-  
+
   clone() {
-    
+
   }
-  
+
   addDecryptHandler(h) {
     this.decryptHandler = h
   }
-  
+
   sync(block) {
     console.log()
     if (block <= this.position) {
@@ -61,6 +61,7 @@ class TXHandler {
     if (!this.doneSyncing) {
       throw "Not done syncing!"
     }
+    // Race condition
     this.doneSyncing = false
     const createTopicFilter = (topic) => this.web3.eth.filter({
       fromBlock: this.position + 1,
@@ -68,43 +69,44 @@ class TXHandler {
       address: constants.blockchain,
       topics: [topic],
     })
-    
-    const transactionListener = createTopicFilter(constants.transactionTopic)    
-    const ringGroupListener = createTopicFilter(constants.ringGroupTopic)    
-    const ringProofListener = createTopicFilter(constants.ringProofTopic)    
+
+    const transactionListener = createTopicFilter(constants.transactionTopic)
+    const ringGroupListener = createTopicFilter(constants.ringGroupTopic)
+    const ringProofListener = createTopicFilter(constants.ringProofTopic)
     const rangeProofListener = createTopicFilter(constants.rangeProofTopic)
     const committedRingGroupListener = createTopicFilter(constants.committedRingGroupTopic)
-    
+
     let transactionResults
     let ringGroupResults
     let ringProofResults
     let rangeProofResults
     let committedRingGroupResults
-    
+
     transactionListener.get((error, result) => {
       transactionResults = result
     })
-    
+
     ringGroupListener.get((error, result) => {
       ringGroupResults = result
     })
-    
+
     ringProofListener.get((error, result) => {
       ringProofResults = result
     })
-    
+
     rangeProofListener.get((error, result) => {
       rangeProofResults = result
     })
-    
+
     committedRingGroupListener.get((error, result) => {
       committedRingGroupResults = result
     })
-    
+
     this.interval = setInterval(() => {
       if (!transactionResults || !ringGroupResults || !ringProofResults || !rangeProofResults || !committedRingGroupResults) {
         return
       }
+      clearInterval(this.interval)
       for (const transactionResult of transactionResults) {
         this.handleTransactionResult(transactionResult)
       }
@@ -120,20 +122,19 @@ class TXHandler {
       for (const committedRingGroupResult of committedRingGroupResults) {
         this.handleCommittedRingGroupResult(committedRingGroupResult)
       }
-      clearInterval(this.interval)
       this.doneSyncing = true
     }, 2000)
-    
+
     this.position = block
   }
-  
+
   initTx(id) {
     if (!this.transactions[id]) {
       this.transactions[id] = {}
     }
     return this.transactions[id]
   }
-  
+
   initRingGroup(ringGroupHash) {
     if (!this.ringGroups[ringGroupHash]) {
       this.ringGroups[ringGroupHash] = {}
@@ -142,7 +143,7 @@ class TXHandler {
     }
     return this.ringGroups[ringGroupHash]
   }
-  
+
   handleTransactionResult(result) {
     const tx = parser.parseTransaction(parser.initParser(result.data))
     const txData = this.initTx(tx.id)
@@ -162,7 +163,7 @@ class TXHandler {
       this.tryAddToFunds(tx)
     }
   }
-  
+
   handleRingGroupResult(result) {
     const ringGroup = parser.parseRingGroup(parser.initParser(result.data))
     if (this.ringGroups[ringGroup.ringGroupHash]) {
@@ -188,7 +189,7 @@ class TXHandler {
       this.ringToRingGroup[ringHash] = ringGroup.ringGroupHash
     }
   }
-  
+
   handleRingProofResult(result) {
     const rp = parser.parseRingProof(parser.initParser(result.data))
     const ringGroupHash = this.ringToRingGroup[rp.ringHash]
@@ -232,7 +233,7 @@ class TXHandler {
       ringGroupData.pendingResult &= verificationResult
     }
   }
-  
+
   handleRangeProofResult(result) {
     const rp = parser.parseRangeProof(parser.initParser(result.data))
     const ringGroupData = this.ringGroups[rp.ringGroupHash]
@@ -281,7 +282,7 @@ class TXHandler {
       }
     }
   }
-  
+
   handleCommittedRingGroupResult(result) {
     const c = parser.parseCommittedRingGroup(parser.initParser(result.data))
     const ringGroupData = this.ringGroups[c.ringGroupHash]
@@ -294,7 +295,7 @@ class TXHandler {
       console.error("Ring Group is waiting on Range Proofs")
       return
     }
-    if (!ringGroupData.isValid) {  
+    if (!ringGroupData.isValid) {
       console.error("Ring Group Validity Discrepancy")
       return
     }
@@ -304,7 +305,7 @@ class TXHandler {
       this.transactions[outputID].confirmed = result.blockNumber
     }
   }
-  
+
   tryAddToFunds(tx) {
     if (tx.receiverData) {
       this.funds.push(tx.id)
@@ -313,7 +314,7 @@ class TXHandler {
       }
     }
   }
-  
+
   getPublicKey() {
     const {spendPub, viewPub} = this.wallet.generateKey()
     return {
@@ -321,7 +322,7 @@ class TXHandler {
       viewPub
     }
   }
-  
+
   collectAmount(goalAmount) {
     let amount = bigInt[0]
     const funds = []
@@ -332,7 +333,7 @@ class TXHandler {
       }
       funds.push(fund.tx)
       amount = amount.plus(fund.tx.receiverData.amount)
-      
+
       if (amount.geq(goalAmount)) {
         break
       }
@@ -345,7 +346,7 @@ class TXHandler {
       amount
     }
   }
-  
+
   getMixers(num) {
     const txs = []
     for (const i in this.transactions) {
@@ -362,12 +363,12 @@ class TXHandler {
     }
     return mixers
   }
-  
+
   createMint(amount) {
     return TXHandler.cleanTx(this.wallet.createTransaction(this.wallet.masterKey, amount, true))
     /*const rand = bigInt.randBetween(0, bigInt[2].pow(256)).mod(pt.q)
-    const pubKey = 
-    
+    const pubKey =
+
 		amount = bigInt(amount)
     const tx = {}
     tx.src = pt.g.times(rand).affine()
@@ -377,7 +378,7 @@ class TXHandler {
     tx.commitmentAmount = amount
     return tx;*/
   }
-  
+
   createFullTx(pubKey, amount, minerFee) {
     amount = bigInt(amount)
     minerFee = bigInt(minerFee)
@@ -407,7 +408,7 @@ class TXHandler {
       let blindingKey;
       if (i === funds.length - 1) {
         blindingKey = blindingSum.mod(pt.q).plus(pt.q).mod(pt.q)
-      } else {  
+      } else {
         blindingKey = bigInt.randBetween(0, bigInt[2].pow(256)).mod(pt.q)
         blindingSum = blindingSum.minus(blindingKey)
       }
@@ -432,7 +433,7 @@ class TXHandler {
     }
     return fullTX
   }
-  
+
   static cleanTx(tx) {
     return {
       src: tx.src,

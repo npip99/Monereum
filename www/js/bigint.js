@@ -237,7 +237,7 @@ class NativeBigIntClass {
   }
 
   toJSNumber() {
-    if (this.abs().value < Number.MAX_SAFE_INTEGER) {
+    if (this.abs().value > Number.MAX_SAFE_INTEGER) {
       throw "Value does not fit in a Javascript integer"
     }
     return Number(this.value)

@@ -40,6 +40,9 @@ const format = function() {
   let heap = "";
   for (let i = 0; i < arguments.length; i++) {
     const arg = arguments[i];
+    if (arg === undefined) {
+      continue
+    }
     if (typeof arg === "string") {
       let hex = padInt(arg.length)
       for (let j = 0; j < arg.length; j++) {
@@ -80,6 +83,7 @@ const format = function() {
   return hex;
 }
 
+// Creates hash for Solidity functions
 const funcHash = function(str) {
   let hex = "";
   for (let i = 0; i < str.length; i++) {

@@ -48,8 +48,8 @@ class Wallet {
     const rand = this.sentSeed.mod(pt.q);
 		amount = bigInt(amount)
     const tx = {}
-    const generator = hash(pubKey.spendPub).and(bigInt[1].shiftLeft(64).minus(1))
-    tx.src = pt.g.times(generator).hashInP().times(rand).affine()
+    const generatorVal = hash(pubKey.spendPub).and(bigInt[1].shiftLeft(64).minus(1))
+    tx.src = pt.g.times(generatorVal).hashInP().times(rand).affine()
     const secret = hash(pubKey.viewPub.times(rand).affine())
     tx.dest = pt.g.times(secret).plus(pubKey.spendPub).affine()
     const blindingKey = noBlindingKey ? 0 : hash(secret)
@@ -65,12 +65,32 @@ class Wallet {
     return tx
   }
 
-  getReceipt(tx) {
-    return hash(tx.senderData.secret.plus(1));
+  createSignature(tx, msg) {
+    // (h, k) s.t. H(hR + kG) = h
+    const a = this.getRandom().mod(pt.q)
+    const generatorVal = hash(tx.senderData.recipient.spendPub).and(bigInt[1].shiftLeft(64).minus(1))
+    const generator = pt.g.times(generatorVal).hashInP()
+    const h = hash(generator.times(a).affine(), msg)
+    // h*srcKey + k = a, k = a - h*srcKey
+    const k = a.minus(h.times(tx.senderData.srcKey))
+    return {
+      tx: tx,
+      msg: msg,
+      // Too simple to be called a borromean, but I like consistency
+      borromean: h,
+      sigProof: k,
+    }
   }
 
-  wasCreatedBy(tx, rand) {
-    return tx.src.eq(pt.g.times(rand))
+  verifySignature(sigProof) {
+    const generatorVal = hash(sigProof.tx.receiverData.pubKey.spendPub).and(bigInt[1].shiftLeft(64).minus(1))
+    const generator = pt.g.times(generatorVal).hashInP()
+    const h = hash(
+      // hR + kG
+      sigProof.tx.src.times(sigProof.borromean).plus(generator.times(sigProof.tx.sigProof)).affine(),
+      sigProof.msg
+    )
+    return h.eq(sigProof.borromean)
   }
 
   tryDecryptTransaction(tx) {
@@ -116,15 +136,9 @@ class Wallet {
       secret,
       blindingKey,
       privKey,
+      pubKey: key,
     };
     return tx;
-  }
-
-  isValidReceipt(tx, receipt) {
-    if (!tx.receiverData) {
-      throw "Can't check receipt for unowned Tx"
-    }
-    return hash(tx.receiverData.secret.plus(1)).eq(receipt);
   }
 
   createRingProof(from, mixers, outputHash, newBlindingKey) {

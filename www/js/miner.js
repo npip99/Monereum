@@ -16,14 +16,14 @@ class Miner {
     this.pending = {}
     this.rangeProofsRemaining = {}
     this.watched = {}
-    
+
     const ringGroups = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
         address: constants.blockchain,
         topics: [constants.ringGroupTopic]
     })
-    
+
     ringGroups.watch((error, result) => {
       if (this.watched[result.transactionHash]) {
         return
@@ -35,7 +35,7 @@ class Miner {
         console.log("Ring Group of Range Proof recognized: ", ringGroupHash.toString())
         const rangeProofs = ringGroupData.rangeProofs
         this.rangeProofsRemaining[ringGroupHash] = rangeProofs.length
-        const func = hash.padItem(hash.funcHash("logRangeProof(uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")).slice(0, 4*2)
+        const func = hash.padItem(hash.funcHash("logRangeProof(uint256[],uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")).slice(0, 4*2)
         rangeProofs.forEach(rp => {
           const data = func + hash.format(...rp)
           this.web3.eth.sendTransaction({
@@ -50,14 +50,14 @@ class Miner {
         })
       }
     })
-    
+
     const rangeProofs = this.web3.eth.filter({
         from: 0,
         toBlock: 'latest',
         address: constants.blockchain,
         topics: [constants.rangeProofTopic]
     })
-    
+
     rangeProofs.watch((error, result) => {
       if (this.watched[result.transactionHash]) {
         return
@@ -68,9 +68,9 @@ class Miner {
         console.log("Range Proof of ", rangeProof.ringGroupHash.toString(), " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
         if((--this.rangeProofsRemaining[rangeProof.ringGroupHash]) == 0) {
           setTimeout(() => {
-            const {outputIDs, ringHashes} = this.pending[rangeProof.ringGroupHash]
-            const func = hash.padItem(hash.funcHash("commitRingGroup(uint256[],uint256[])")).slice(0, 4*2)
-            const data = func + hash.format(outputIDs, ringHashes)
+            const {outputIDs, ringHashes, rangeHashes} = this.pending[rangeProof.ringGroupHash]
+            const func = hash.padItem(hash.funcHash("commitRingGroup(uint256[],uint256[],uint256[])")).slice(0, 4*2)
+            const data = func + hash.format(outputIDs, ringHashes, rangeHashes)
             this.web3.eth.sendTransaction({
               to: constants.blockchain,
               data: data,
@@ -85,11 +85,11 @@ class Miner {
       }
     })
   }
-  
+
   formatRangeProof(rp) {
     return rp
   }
-  
+
   mint(tx) {
     const func = hash.padItem(hash.funcHash("mint(uint256[2],uint256[2],uint256)")).slice(0, 4*2)
     const data = func + hash.format(tx.src, tx.dest, tx.commitmentAmount)
@@ -105,7 +105,7 @@ class Miner {
       }
     })
   }
-  
+
   submit(tx) {
     if (!tx) {
       console.log("Tried to submit Non-Existant Tx")
@@ -123,7 +123,7 @@ class Miner {
         return null
       }
     }
-    const {ringGroupHash, ringHashes, outputIDs, submit, rangeProofs} = this.formatSubmit(tx)
+    const {ringGroupHash, ringHashes, rangeHashes, outputIDs, submit, rangeProofs} = this.formatSubmit(tx)
     const func = hash.padItem(hash.funcHash("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],uint256,uint256[2])".replace(/MIXIN/g, constants.mixin)))
     const data = func.slice(0, 4*2) + hash.format(...submit)
     this.web3.eth.sendTransaction({
@@ -134,17 +134,17 @@ class Miner {
       if (error) {
         console.error("Submit Failed")
       } else {
-        this.pending[ringGroupHash] = {rangeProofs, ringHashes, outputIDs}
+        this.pending[ringGroupHash] = {rangeProofs, rangeHashes, ringHashes, outputIDs}
         console.log("Submit Succeeded: ", hash)
       }
     })
   }
-  
+
   formatSubmit(tx) {
     const minerPub = this.wallet.generateKey()
     const minerTx = this.wallet.createTransaction(minerPub, tx.minerFee, true)
     const minerDest = minerTx.dest
-    
+
     const outputDests = tx.outputs.map(a => a.dest)
     const outputSrcs = tx.outputs.map(a => a.src)
     const outputCommitments = tx.outputs.map(a => a.commitment)
@@ -172,12 +172,19 @@ class Miner {
     const rangeHashes = []
     for (let i = 0; i < tx.rangeProofs.length; i++) {
       const rxRangeProof = tx.rangeProofs[i]
-      let rangeProof = [outputIDs, rxRangeProof.commitment, rxRangeProof.rangeCommitments, rxRangeProof.rangeBorromeans, rxRangeProof.rangeProofs, rxRangeProof.indices]
-      rangeProof[4].forEach(a => a.static = true)
-      const rangeHash = hash(ringGroupHash, ...rangeProof)
-      rangeProof = [ringHashes, ...rangeProof]
-      rangeProofs.push(rangeProof)
+      const rangeProof = [
+        rxRangeProof.commitment,
+        rxRangeProof.rangeCommitments,
+        rxRangeProof.rangeBorromeans,
+        rxRangeProof.rangeProofs.map(a => {a.static = true; return a}),
+        rxRangeProof.indices
+      ]
+      const rangeHash = hash(...rangeProof)
       rangeHashes.push(rangeHash)
+      rangeProofs.push(rangeProof)
+    }
+    for (let i = 0; i < tx.rangeProofs.length; i++) {
+      rangeProofs[i] = [outputIDs, ringHashes, rangeHashes].concat(rangeProofs[i])
     }
     const zippedRingProofs = zip(...ringProofs.map(ringProof => ringProof.slice(0, ringProof.length - 1)))
     const zippedOutputs = [outputDests, outputSrcs, outputCommitments, outputAmounts]
@@ -185,6 +192,7 @@ class Miner {
     return {
       ringGroupHash,
       ringHashes,
+      rangeHashes,
       outputIDs,
       rangeProofs,
       submit,
