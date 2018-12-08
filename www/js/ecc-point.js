@@ -50,18 +50,15 @@ class ECCPoint {
     }
 
 		hashInP() {
-			if (this.hashedInP) {
-				return this.hashedInP
-			}
-			this.affine()
-			const pHash = hash(this).toArray(2).value.reverse()
+			const affine = this.affine()
+			const pHash = hash(affine).toArray(2).value.reverse()
 			let hashGenerator = ECCPoint.zero
 			for (let i = 0; i < 128; i++) {
 				if (pHash[i] === 1) {
 					hashGenerator = hashGenerator.plus(ECCPoint.hashSet[i])
 				}
 			}
-			return this.hashedInP = hashGenerator
+			return hashGenerator
 		}
 
     eq(pt) {
@@ -173,11 +170,13 @@ class ECCPoint {
 				return ECCPoint.zero
 			}
 			this.uses++
+			let ret;
       if (this.uses > 5) {
-        return this.combTimes(s)
+        ret = this.combTimes(s)
       } else {
-				return this.endoTimes(s)
+				ret = this.endoTimes(s)
 			}
+			return ret
 		}
 
 		affine() {
@@ -201,6 +200,10 @@ class ECCPoint {
 			// this.x = x
 			// this.y = y
 			// this.z = bigInt[1]
+			if (this.isOnCurve() && !(new ECCPoint(x, y, bigInt[1])).isOnCurve()) {
+				console.error("Bad Affine: ", this)
+				console.log(this.z, zinv, p)
+			}
 			return new ECCPoint(x, y, bigInt[1]);
 		}
 
@@ -298,7 +301,7 @@ class ECCPoint {
       const v1 = ECCPoint.v1
       const v2 = ECCPoint.v2
 			const cross = ECCPoint.cross
-			const half = cross.abs().shiftRight()
+			const half = cross.abs().shiftRight(1)
 
 			// First we solve the below:
       // [k, 0] = b1[v1[0], v1[1]], b2[v2[0], v2[1]]
@@ -403,7 +406,7 @@ class ECCPoint {
 // === Set parameters ===
 ECCPoint.p = bigInt("21888242871839275222246405745257275088696311157297823662689037894645226208583");
 ECCPoint.q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
-ECCPoint.zero = new ECCPoint(1, 1, 0);
+ECCPoint.zero = new ECCPoint(0, 0);
 
 ECCPoint.combWidth = 8
 
@@ -461,13 +464,14 @@ ECCPoint.cross = v2[0].times(v1[1]).minus(v2[1].times(v1[0]))
 
 // === Initialize Constants ===
 ECCPoint.g = new ECCPoint(1, 2);
-ECCPoint.g.useSave = true
+
 const nextHashP = (pt) => {
 	const hashPt = hash(pt.affine())
 	return ECCPoint.findNextY(hashPt).affine()
 }
+
 ECCPoint.h = nextHashP(ECCPoint.g)
-ECCPoint.h.useSave = true
+
 ECCPoint.hashSet = [nextHashP(ECCPoint.h)]
 for (let i = 1; i < 128; i++) {
 	ECCPoint.hashSet.push(nextHashP(ECCPoint.hashSet[i - 1]))

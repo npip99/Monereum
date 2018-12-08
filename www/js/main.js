@@ -29,13 +29,13 @@ window.addEventListener('load', async () => {
     else {
         console.log('Non-Ethereum browser detected. You should consider trying MetaMask!');
     }
-    
+
     result = document.getElementById("result")
     log = document.getElementById("log")
     timer = null
-    
+
     m = new miner(new wallet("miner"), window.web3)
-    
+
     changePerson = e => {
       e.preventDefault()
       const form = e.target
@@ -71,12 +71,12 @@ window.addEventListener('load', async () => {
         document.getElementById("wallet_form").style = "display: block;"
       }
     }
-    
+
     getPublicKey = e => {
       e.preventDefault()
       result.innerHTML = JSON.stringify(handler.getPublicKey())
     }
-    
+
     createTx = e => {
       e.preventDefault()
       const form = e.target
@@ -84,7 +84,7 @@ window.addEventListener('load', async () => {
       const key = handler.getPublicKey()
       result.innerHTML = JSON.stringify(handler.createMint(amount))
     }
-    
+
     createFullTx = e => {
       e.preventDefault()
       const form = e.target
@@ -92,21 +92,20 @@ window.addEventListener('load', async () => {
       const amount = form.elements.amount.value
       result.innerHTML = JSON.stringify(handler.createFullTx(parser.parseJSONKey(JSON.parse(pubKey)), amount, 3))
     }
-    
+
     mintTx = e => {
       e.preventDefault()
       const form = e.target
       const tx = form.elements.tx.value
       m.mint(parser.parseJSONTx(JSON.parse(tx)))
     }
-    
+
     submitFullTx = e => {
       e.preventDefault()
       const form = e.target
       const fullTx = form.elements.fullTx.value
       m.submit(parser.parseJSONFullTx(JSON.parse(fullTx)))
     }
-    
-    
-});
 
+
+});

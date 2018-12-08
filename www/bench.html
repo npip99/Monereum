@@ -199,10 +199,11 @@ class NativeBigIntClass {
   }
 
   modInv(p) {
-    // Copied from https://github.com/peterolson/BigInteger.js
+    // Euclidean Algorithm from https://github.com/peterolson/BigInteger.js
+    p = NativeBigInt(p).value
     let t = BigInt(0)
     let newT = BigInt(1)
-    let r = NativeBigInt(p).value
+    let r = p
     let newR = this.abs().value
     let q, lastT, lastR
     while (newR != 0) {

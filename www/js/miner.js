@@ -141,15 +141,19 @@ class Miner {
   }
 
   formatSubmit(tx) {
+    // Collect miner fee data
     const minerPub = this.wallet.generateKey()
     const minerTx = this.wallet.createTransaction(minerPub, tx.minerFee, true)
     const minerDest = minerTx.dest
 
+    // Format outputs and calculate output hash
     const outputDests = tx.outputs.map(a => a.dest)
     const outputSrcs = tx.outputs.map(a => a.src)
     const outputCommitments = tx.outputs.map(a => a.commitment)
     const outputAmounts = tx.outputs.map(a => a.commitmentAmount)
     const outputHash = hash(outputDests, outputSrcs, outputCommitments, outputAmounts, tx.minerFee)
+
+    // Format ring proofs and calculate ring hashes
     const ringProofs = []
     const ringHashes = []
     for (let i = 0; i < tx.ringProofs.length; i++) {
@@ -162,12 +166,8 @@ class Miner {
       ringProofs.push(ringProof)
       ringHashes.push(ringHash)
     }
-    const outputIDs = []
-    for (let i = 0; i < outputDests.length; i++) {
-      outputIDs.push(hash(outputDests[i]))
-    }
-    outputIDs.push(hash(minerDest))
-    const ringGroupHash = hash(outputIDs, ringHashes)
+
+    // Format range proofs and calculate range hashes
     const rangeProofs = []
     const rangeHashes = []
     for (let i = 0; i < tx.rangeProofs.length; i++) {
@@ -183,12 +183,26 @@ class Miner {
       rangeHashes.push(rangeHash)
       rangeProofs.push(rangeProof)
     }
+
+    // Init Ring Group
+    const outputIDs = []
+    for (let i = 0; i < outputDests.length; i++) {
+      outputIDs.push(hash(outputDests[i]))
+    }
+    outputIDs.push(hash(minerDest))
+    const ringGroupHash = hash(outputIDs, ringHashes, rangeHashes)
+
+    // Collect Range Proof data
     for (let i = 0; i < tx.rangeProofs.length; i++) {
       rangeProofs[i] = [outputIDs, ringHashes, rangeHashes].concat(rangeProofs[i])
     }
+
+    // Format Data
     const zippedRingProofs = zip(...ringProofs.map(ringProof => ringProof.slice(0, ringProof.length - 1)))
     const zippedOutputs = [outputDests, outputSrcs, outputCommitments, outputAmounts]
     const submit = [...zippedRingProofs, rangeHashes, ...zippedOutputs, tx.minerFee, minerDest]
+
+    // Return formatted data
     return {
       ringGroupHash,
       ringHashes,

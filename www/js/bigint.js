@@ -181,9 +181,11 @@ class NativeBigIntClass {
   }
 
   modInv(p) {
+    // Euclidean Algorithm from https://github.com/peterolson/BigInteger.js
+    p = NativeBigInt(p).value
     let t = BigInt(0)
     let newT = BigInt(1)
-    let r = NativeBigInt(p).value
+    let r = p
     let newR = this.abs().value
     let q, lastT, lastR
     while (newR != 0) {
@@ -195,7 +197,9 @@ class NativeBigIntClass {
       newT = lastT - (q * newT);
       newR = lastR - (q * newR);
     }
-    if (r != 1) throw new Error(this.toString() + " and " + p.toString() + " are not co-prime");
+    if (r != 1) {
+      throw new Error(this.toString() + " and " + p.toString() + " are not co-prime");
+    }
     if (t < 0) {
       t = t + p;
     }

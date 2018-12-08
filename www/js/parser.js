@@ -13,7 +13,7 @@ class Parser {
     }
     return ret
   }
-  
+
   static parseJSONKey(key) {
     return {
       spendPub: Parser.parseJSONPt(key.spendPub),
@@ -71,19 +71,19 @@ class Parser {
     const y = Parser.parseNum(parser)
     return new pt(x, y)
   }
-  
+
   static parseNum(parser) {
     const hex = parser[0].slice(parser[1], parser[1] += 32*2)
     return bigInt(hex, 16)
   }
-  
+
   static parseCommittedRingGroup(parser) {
     const c = {
       ringGroupHash: Parser.parseNum(parser),
     }
     return c
   }
-  
+
   static parseTransaction(parser) {
     const outputID = Parser.parseNum(parser)
     const outputSrc = Parser.parsePt(parser)
@@ -99,7 +99,7 @@ class Parser {
     }
     return tx
   }
-  
+
   static parseRingProof(parser) {
     let ptr = 0
     const ringHash = Parser.parseNum(parser)
@@ -131,13 +131,13 @@ class Parser {
     }
     return rp
   }
-  
+
   static parseRingGroup(parser) {
     const ringGroupHash = Parser.parseNum(parser)
     // Skip over dynamic argument locations
     Parser.parseNum(parser)
     Parser.parseNum(parser)
-    
+
     const numOutputs = Parser.parseNum(parser)
     const outputIDs = []
     for (let i = 0; i < numOutputs; i++) {
@@ -155,7 +155,7 @@ class Parser {
     }
     return rg
   }
-  
+
   static parseRangeProof(parser) {
     const ringGroupHash = Parser.parseNum(parser)
     const commitment = Parser.parsePt(parser)
@@ -164,7 +164,7 @@ class Parser {
     Parser.parseNum(parser)
     Parser.parseNum(parser)
     Parser.parseNum(parser)
-    
+
     const numBits = Parser.parseNum(parser)
     const rangeCommitments = []
     for (let i = 0; i < numBits; i++) {
@@ -198,7 +198,7 @@ class Parser {
 			indices
 		}
   }
-  
+
   static initParser(data) {
     const parser = [data.slice(2), 0]
     return parser
