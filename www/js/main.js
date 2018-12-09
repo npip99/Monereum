@@ -5,6 +5,7 @@ const pt = require('./ecc-point')
 const txhandler = require('./txhandler')
 const miner = require('./miner')
 const parser = require('./parser')
+const aes = require('aes-js')
 
 window.addEventListener('load', async () => {
     // Modern dapp browsers...
@@ -14,8 +15,9 @@ window.addEventListener('load', async () => {
             // Request account access if needed
             await ethereum.enable();
             // Acccounts now exposed
-            // web3.eth.sendTransaction({/* ... */});
         } catch (error) {
+            console.error(error);
+            return;
             // User denied account access...
         }
     }
@@ -23,43 +25,48 @@ window.addEventListener('load', async () => {
     else if (window.web3) {
         window.web3 = new Web3(web3.currentProvider);
         // Acccounts always exposed
-        web3.eth.sendTransaction({/* ... */});
     }
     // Non-dapp browsers...
     else {
-        console.log('Non-Ethereum browser detected. You should consider trying MetaMask!');
+        console.error('Non-Ethereum browser detected. You should consider trying MetaMask!');
+        return;
     }
 
-    result = document.getElementById("result")
-    log = document.getElementById("log")
-    timer = null
+    window.aes = aes
+    window.pt = pt
+    window.bigInt = bigInt
+    window.hash = hash
+    window.parser = parser
+    const result = document.getElementById("result")
+    const log = document.getElementById("log")
+    let refreshTimer = null
 
-    m = new miner(new wallet("miner"), window.web3)
+    window.m = new miner(new wallet("miner" + Math.random()), window.web3)
 
     changePerson = e => {
       e.preventDefault()
       const form = e.target
       const id = parseInt(form.elements.id.value)
-      if (timer) {
-        clearInterval(timer)
+      if (refreshTimer) {
+        clearInterval(refreshTimer)
       }
       if (id === 0) {
         document.getElementById("miner_form").style = "display: block;"
         document.getElementById("wallet_form").style = "display: none;"
       } else {
-        owner = new wallet("Person #" + id)
-        handler = new txhandler(owner, window.web3)
+        window.person = new wallet("Person #" + id)
+        window.handler = new txhandler(person, window.web3)
         handler.addDecryptHandler(tx => {
           log.innerHTML += JSON.stringify(tx, null, '\t')
         })
-        const numKeys = parseInt(form.elements.numKeys.value)
+        const numKeys = parseInt(form.elements.numKeys.value) || 0
         for (let i = 0; i < numKeys; i++) {
           handler.getPublicKey()
         }
         window.web3.eth.getBlockNumber((error, result) => {
           handler.sync(result)
         })
-        timer = setInterval(() => {
+        refreshTimer = setInterval(() => {
           window.web3.eth.getBlockNumber((error, result) => {
             if (handler.doneSyncing) {
               console.log("Syncing to: ", result)
@@ -106,6 +113,4 @@ window.addEventListener('load', async () => {
       const fullTx = form.elements.fullTx.value
       m.submit(parser.parseJSONFullTx(JSON.parse(fullTx)))
     }
-
-
 });

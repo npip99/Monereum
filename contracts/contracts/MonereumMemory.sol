@@ -1,3 +1,5 @@
+pragma solidity 0.4.25;
+
 import "./MonereumMath.sol";
 
 contract MonereumMemory is MonereumMath {
@@ -6,7 +8,7 @@ contract MonereumMemory is MonereumMath {
     // Blockchain state
     mapping(uint256 => uint256) transactions;
     mapping(uint256 => Status) statusData;
-    mapping(uint256 => bool) usedImages;
+    mapping(uint256 => uint256) keyImageToRingGroup;
 
     // Ethereum balances
     mapping(address => uint256) ethBalances;
@@ -17,14 +19,14 @@ contract MonereumMemory is MonereumMath {
     // Ring group data
     mapping(uint256 => uint256) ringGroupData;
     mapping(uint256 => address) goodRingGroupBountyHolders;
-    // Dispute Topic can be any ring, or any range proof
-    mapping(uint256 => address) badDisputeTopicBountyHolders;
 
-    // Ring proof data
-    mapping(uint256 => ProofStatus) ringStatuses;
+    // Topic data. A Topic can be any ring/range proof hash.
+    // ringGroupHash => Dispute Topic => Bounty Holder.
+    mapping(uint256 => mapping(uint256 => address)) badDisputeTopicBountyHolders;
+    // ringGroupHash => Dispute Topic => Topic Status
+    mapping(uint256 => mapping(uint256 => ProofStatus)) topicStatuses;
 
     // Range proof data
-    mapping(uint256 => ProofStatus) rangeStatuses;
     mapping(uint256 => uint256) rangeToRingGroup;
 
     // === Data Formats ===

@@ -1,6 +1,7 @@
 const bigInt = require('./bigint')
 const pt = require('./ecc-point')
 const constants = require('./constants')
+const aes = require('aes-js')
 
 class Parser {
   static parseJSONBigInt(num) {
@@ -73,8 +74,13 @@ class Parser {
   }
 
   static parseNum(parser) {
-    const hex = parser[0].slice(parser[1], parser[1] += 32*2)
+    const hex = Parser.parseHex(parser, 32)
     return bigInt(hex, 16)
+  }
+
+  static parseHex(parser, numBytes) {
+    const hex = parser.data.slice(parser.pos, parser.pos += numBytes * 2)
+    return hex
   }
 
   static parseCommittedRingGroup(parser) {
@@ -137,7 +143,22 @@ class Parser {
     // Skip over dynamic argument locations
     Parser.parseNum(parser)
     Parser.parseNum(parser)
-
+    Parser.parseNum(parser)
+/*
+"0x
+8d51ef83aea4596dab33f455a3adf662791e967053a25d10b92da1dc0be9eb81
+0000000000000000000000000000000000000000000000000000000000000080
+0000000000000000000000000000000000000000000000000000000000000100
+0000000000000000000000000000000000000000000000000000000000000140
+0000000000000000000000000000000000000000000000000000000000000003
+37ed990542f48fff6353379a19cb7de453d54ee1a3fbb1f6fa0169d9c648ce30
+bdd427ec359c318b1bca2f54a0a033e8f2a27807dbb146c9c3f74940342f7f0e
+390bf71867b8da36980bb0b6c1d44abd52e45313a0a18ce0efdb120dbe6644ff
+0000000000000000000000000000000000000000000000000000000000000001
+cf99bd6990fa1b9943866204ed876602be7960e719515aa3fc17c1914a324716
+0000000000000000000000000000000000000000000000000000000000000005
+00f2c7c344000000000000000000000000000000000000000000000000000000"
+*/
     const numOutputs = Parser.parseNum(parser)
     const outputIDs = []
     for (let i = 0; i < numOutputs; i++) {
@@ -148,10 +169,13 @@ class Parser {
     for (let i = 0; i < numRings; i++) {
       ringHashes.push(Parser.parseNum(parser))
     }
+    const numBytes = Parser.parseNum(parser)
+    const msgHex = Parser.parseHex(parser, numBytes.toJSNumber())
     const rg = {
       ringGroupHash,
       outputIDs,
-      ringHashes
+      ringHashes,
+      msgHex,
     }
     return rg
   }
@@ -200,7 +224,10 @@ class Parser {
   }
 
   static initParser(data) {
-    const parser = [data.slice(2), 0]
+    const parser = {
+      data: data.slice(2),
+      pos: 0
+    }
     return parser
   }
 }

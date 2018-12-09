@@ -9,23 +9,29 @@ contract MonereumConstants {
     uint256 constant goodRingBountyAmount = 1 ether / 10;
     uint256 constant badRingBountyAward = 1 ether / 10;
     uint256 constant goodRingBountyAward = 1 ether / 10;
-    
+
     // Math Data
     uint256 public constant p = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
     uint256 public constant q = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
     uint256[2] g = [uint256(1), uint256(2)];
-    
+
     // Transaction format data
     uint256 constant signBitLocation = 254;
     uint256 constant signBit = uint256(1) << signBitLocation;
     uint256 constant statusBitLocation = 255;
     uint256 constant statusBit = uint256(1) << statusBitLocation;
+
+    // When remaining > 0, 0-251 is rangeCommitmentCheck
+    // When remaining == 0, 0-251 is Timer
     
     // ringGroup format data
+    //  255   252           0
+    // |remaining|check/timer|
     uint256 constant rangeCommitmentCheckBitLocation = 0;
-    uint256 constant rangeCommitmentCheckBitMask = (uint256(1) << 204) - 1;
-    uint256 constant rangeProofsRemainingBitLocation = 204;
+    uint256 constant rangeCommitmentCheckBitMask = (uint256(1) << 252) - 1;
+    uint256 constant rangeProofsRemainingBitLocation = 252;
     uint256 constant rangeProofsRemainingBitMask = (uint256(1) << 4) - 1;
-    uint256 constant timeBitLocation = 208;
-    uint256 constant timeBitMask = (uint256(1) << 48) - 1; 
+    // Overlap
+    uint256 constant timerBitLocation = rangeCommitmentCheckBitLocation;
+    uint256 constant timerBitMask = rangeCommitmentCheckBitMask;
 }

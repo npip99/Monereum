@@ -32,12 +32,12 @@ class Miner {
       const {ringGroupHash, outputIDs, ringHashes} = parser.parseRingGroup(parser.initParser(result.data))
       const ringGroupData = this.pending[ringGroupHash]
       if (ringGroupData) {
-        console.log("Ring Group of Range Proof recognized: ", ringGroupHash.toString())
+        console.log("Ring Group recognized: ", ringGroupHash.toString())
         const rangeProofs = ringGroupData.rangeProofs
         this.rangeProofsRemaining[ringGroupHash] = rangeProofs.length
-        const func = hash.padItem(hash.funcHash("logRangeProof(uint256[],uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")).slice(0, 4*2)
+        const func = hash.funcHash("logRangeProof(uint256[],uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")
         rangeProofs.forEach(rp => {
-          const data = func + hash.format(...rp)
+          const data = func.slice(0, 4*2) + hash.format(...rp)
           this.web3.eth.sendTransaction({
             to: constants.blockchain,
             data: data,
@@ -69,15 +69,15 @@ class Miner {
         if((--this.rangeProofsRemaining[rangeProof.ringGroupHash]) == 0) {
           setTimeout(() => {
             const {outputIDs, ringHashes, rangeHashes} = this.pending[rangeProof.ringGroupHash]
-            const func = hash.padItem(hash.funcHash("commitRingGroup(uint256[],uint256[],uint256[])")).slice(0, 4*2)
-            const data = func + hash.format(outputIDs, ringHashes, rangeHashes)
+            const func = hash.funcHash("commitRingGroup(uint256[],uint256[],uint256[])")
+            const data = func.slice(0, 4*2) + hash.format(outputIDs, ringHashes, rangeHashes)
             this.web3.eth.sendTransaction({
               to: constants.blockchain,
               data: data,
               gasPrice: 5e9,
             }, (error, hash) => {
               if (error) {
-                console.error("Ring Commit Failed")
+                console.error("Ring Group Commit Failed")
               }
             })
           }, constants.disputeTime*1000)
@@ -91,8 +91,8 @@ class Miner {
   }
 
   mint(tx) {
-    const func = hash.padItem(hash.funcHash("mint(uint256[2],uint256[2],uint256)")).slice(0, 4*2)
-    const data = func + hash.format(tx.src, tx.dest, tx.commitmentAmount)
+    const func = hash.funcHash("mint(uint256[2],uint256[2],uint256)")
+    const data = func.slice(0, 4*2) + hash.format(tx.src, tx.dest, tx.commitmentAmount)
     this.web3.eth.sendTransaction({
         to: constants.blockchain,
         data: data,
@@ -124,7 +124,7 @@ class Miner {
       }
     }
     const {ringGroupHash, ringHashes, rangeHashes, outputIDs, submit, rangeProofs} = this.formatSubmit(tx)
-    const func = hash.padItem(hash.funcHash("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],uint256,uint256[2])".replace(/MIXIN/g, constants.mixin)))
+    const func = hash.funcHash("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],bytes,uint256[2])".replace(/MIXIN/g, constants.mixin))
     const data = func.slice(0, 4*2) + hash.format(...submit)
     this.web3.eth.sendTransaction({
         to: constants.blockchain,
@@ -151,8 +151,12 @@ class Miner {
     const outputSrcs = tx.outputs.map(a => a.src)
     const outputCommitments = tx.outputs.map(a => a.commitment)
     const outputAmounts = tx.outputs.map(a => a.commitmentAmount)
-    const outputHash = hash(outputDests, outputSrcs, outputCommitments, outputAmounts, tx.minerFee)
+    outputAmounts.push(tx.minerFee)
 
+    const outputMsgs = [tx.msg]
+    outputMsgs.bytes = true
+
+    const outputHash = hash(outputDests, outputSrcs, outputCommitments, outputAmounts, outputMsgs)
     // Format ring proofs and calculate ring hashes
     const ringProofs = []
     const ringHashes = []
@@ -200,7 +204,7 @@ class Miner {
     // Format Data
     const zippedRingProofs = zip(...ringProofs.map(ringProof => ringProof.slice(0, ringProof.length - 1)))
     const zippedOutputs = [outputDests, outputSrcs, outputCommitments, outputAmounts]
-    const submit = [...zippedRingProofs, rangeHashes, ...zippedOutputs, tx.minerFee, minerDest]
+    const submit = [...zippedRingProofs, rangeHashes, ...zippedOutputs, outputMsgs, minerDest]
 
     // Return formatted data
     return {

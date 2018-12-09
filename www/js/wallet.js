@@ -1,6 +1,7 @@
 const pt = require('./ecc-point')
 const bigInt = require('./bigint')
 const hash = require('./hash')
+const aes = require('aes-js')
 
 /*
 tx:
@@ -18,6 +19,50 @@ tx:
 */
 
 class Wallet {
+  constructor(mnemonic) {
+    this.mnemonic = mnemonic
+    this.masterSeed = hash(mnemonic)
+    this.seed = hash(bigInt[0].plus(this.masterSeed))
+    // Generates private keys deterministically
+    this.privSeed = hash(bigInt[1].plus(this.masterSeed))
+    // Generates sending keys deterministically
+    this.sentSeed = hash(bigInt[2].plus(this.masterSeed))
+    this.keys = []
+    this.funds = []
+    this.sent = []
+    this.masterView = hash(this.masterSeed.plus(3)).mod(pt.q)
+    this.spendPubs = {}
+    this.masterKey = this.generateKey()
+  }
+
+  saveWallet() {
+
+  }
+
+  encrypt(msg, key) {
+    const keyBytes = aes.utils.hex.toBytes(hash.padItem(key.toString(16)))
+    const msgBytes = aes.utils.utf8.toBytes(msg)
+
+    const aesCtr = new aes.ModeOfOperation.ctr(keyBytes)
+    const encryptedBytes = aesCtr.encrypt(msgBytes)
+
+    const encryptedHex = aes.utils.hex.fromBytes(encryptedBytes)
+
+    return encryptedHex
+  }
+
+  decrypt(encryptedHex, key) {
+    const keyBytes = aes.utils.hex.toBytes(hash.padItem(key.toString(16)))
+    const encryptedBytes = aes.utils.hex.toBytes(encryptedHex)
+
+    const aesCtr = new aes.ModeOfOperation.ctr(keyBytes)
+    const msgBytes = aesCtr.decrypt(encryptedBytes)
+
+    const msg = aes.utils.utf8.fromBytes(msgBytes)
+
+    return msg
+  }
+
   getRandom() {
     this.seed = hash(this.seed.xor(this.masterSeed))
     return this.seed
@@ -28,11 +73,12 @@ class Wallet {
 
     const spend = this.privSeed.mod(pt.q)
     const spendPub =  pt.g.times(spend).affine()
-    const generator = hash(spendPub).and(bigInt[1].shiftLeft(64).minus(1))
+    const generatorVal = hash(spendPub).and(bigInt[1].shiftLeft(64).minus(1))
+    const generator = pt.g.times(generatorVal).hashInP()
     const view = this.masterView
     const key = {
       spendPub: spendPub,
-      viewPub: pt.g.times(generator).hashInP().times(view).affine(),
+      viewPub: generator.times(view).affine(),
       generator: generator,
       spendKey: spend,
       viewKey: view
@@ -42,14 +88,15 @@ class Wallet {
     return key;
   }
 
-  createTransaction(pubKey, amount, noBlindingKey) {
+  createTransaction(pubKey, amount, msg, noBlindingKey) {
     this.sentSeed = hash(this.sentSeed.xor(this.masterSeed));
 
     const rand = this.sentSeed.mod(pt.q);
 		amount = bigInt(amount)
     const tx = {}
     const generatorVal = hash(pubKey.spendPub).and(bigInt[1].shiftLeft(64).minus(1))
-    tx.src = pt.g.times(generatorVal).hashInP().times(rand).affine()
+    const generator = pt.g.times(generatorVal).hashInP()
+    tx.src = generator.times(rand).affine()
     const secret = hash(pubKey.viewPub.times(rand).affine())
     tx.dest = pt.g.times(secret).plus(pubKey.spendPub).affine()
     const blindingKey = noBlindingKey ? 0 : hash(secret)
@@ -59,7 +106,9 @@ class Wallet {
       secret,
       blindingKey,
       amount,
+      msg,
     }
+    tx.encryptedMsg = this.encrypt("Hey!", secret)
     tx.commitment = pt.g.times(blindingKey).plus(pt.h.times(amount)).affine()
     tx.commitmentAmount = noBlindingKey ? amount : hash(blindingKey).plus(amount).mod(pt.q)
     return tx
@@ -219,7 +268,7 @@ class Wallet {
     const rangeBorromeans = []
     const rangeProofs = []
     const indices = []
-    const bin = tx.senderData.amount.toArray(2).value.reverse()
+    const bin = tx.senderData.amount.toArray(2).value.reverse().concat([0])
     let blindingKeySum = bigInt[0]
 		for (let i = 0; i < bin.length; i++) {
 			let blindingKey;
@@ -330,26 +379,6 @@ class Wallet {
       ringProof.commitmentProofs,
       ringProof.outputHash
     )
-  }
-
-  constructor(mnemonic) {
-    this.mnemonic = mnemonic
-    this.masterSeed = hash(mnemonic)
-    this.seed = hash(bigInt[0].plus(this.masterSeed))
-    // Generates private keys deterministically
-    this.privSeed = hash(bigInt[1].plus(this.masterSeed))
-    // Generates sending keys deterministically
-    this.sentSeed = hash(bigInt[2].plus(this.masterSeed))
-    this.keys = []
-    this.funds = []
-    this.sent = []
-    this.masterView = hash(this.masterSeed.plus(3)).mod(pt.q)
-    this.spendPubs = {}
-    this.masterKey = this.generateKey()
-  }
-
-  saveWallet() {
-
   }
 }
 

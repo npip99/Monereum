@@ -35,6 +35,14 @@ const padItem = i => {
   }
 };
 
+const padBytes = function(hex) {
+  const remaining = (2*32 - hex.length % (2*32)) % (2*32);
+  for (let j = 0; j < remaining; j++) {
+    hex += '0';
+  }
+  return hex
+}
+
 const format = function() {
   const parsedArgs = [];
   let heap = "";
@@ -44,21 +52,33 @@ const format = function() {
       continue
     }
     if (typeof arg === "string") {
-      let hex = padInt(arg.length)
+      let hex = ""
       for (let j = 0; j < arg.length; j++) {
         hex += arg.charCodeAt(j).toString(16)
       }
-      const remaining = hex.length % 64;
-      for (let j = 0; j < remaining; j++) {
-        hex += '0';
-      }
+      hex = padInt(arg.length) + padBytes(hex)
       parsedArgs.push(heap.length / 2);
       heap += hex;
     } else if (arg.length) {
       if (arg.static) {
         parsedArgs.push(arg.map(padItem).join(""))
+      } else if (arg.bytes) {
+        let len = 0
+        let hex = ""
+        for (let i = 0; i < arg.length; i++) {
+          if (typeof arg[i] === "string") {
+            len += arg[i].length / 2
+            hex += padBytes(arg[i])
+          } else {
+            len += 32
+            hex += padInt(arg[i])
+          }
+        }
+        hex = padInt(len) + hex
+        parsedArgs.push(heap.length / 2);
+        heap += hex;
       } else {
-      let hex = padInt(arg.length) + arg.map(a => a.static ? a.map(padItem).join("") : padItem(a)).join("")
+        let hex = padInt(arg.length) + arg.map(a => a.static ? a.map(padItem).join("") : padItem(a)).join("")
         parsedArgs.push(heap.length / 2);
         heap += hex;
       }
@@ -92,9 +112,10 @@ const funcHash = function(str) {
   }
 
   const value = CryptoJS.enc.Hex.parse(hex)
-  return bigInt(sha3(value, {
+  const h = bigInt(sha3(value, {
       outputLength: 256
-  }).toString(), 16);
+  }).toString(), 16)
+  return padItem(h);
 }
 
 const hash = function() {
@@ -104,6 +125,14 @@ const hash = function() {
       outputLength: 256
   }).toString(), 16);
 }
+
+/*
+0x
+0000000000000000000000000000000000000000000000000000000000000005
+0000000000000000000000000000000000000000000000000000000000000040
+0000000000000000000000000000000000000000000000000000000000000003
+4865790000000000000000000000000000000000000000000000000000000000
+*/
 
 hash.format = format
 hash.funcHash = funcHash

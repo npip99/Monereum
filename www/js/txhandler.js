@@ -54,7 +54,6 @@ class TXHandler {
   }
 
   sync(block) {
-    console.log()
     if (block <= this.position) {
       return
     }
@@ -74,7 +73,7 @@ class TXHandler {
     const ringGroupListener = createTopicFilter(constants.ringGroupTopic)
     const ringProofListener = createTopicFilter(constants.ringProofTopic)
     const rangeProofListener = createTopicFilter(constants.rangeProofTopic)
-    const committedRingGroupListener = createTopicFilter(constants.committedRingGroupTopic)
+    const committedRingGroupListener = createTopicFilter(constants.ringGroupCommittedTopic)
 
     let transactionResults
     let ringGroupResults
@@ -169,6 +168,7 @@ class TXHandler {
     if (this.ringGroups[ringGroup.ringGroupHash]) {
       return
     }
+    console.log(ringGroup.msgHex)
     console.log("Ring Group Received: ", result.transactionHash)
     // console.log("Ring Group Received: ", JSON.stringify(ringGroup, null, '\t'))
     const ringGroupData = this.initRingGroup(ringGroup.ringGroupHash)
@@ -206,7 +206,6 @@ class TXHandler {
       }
     }
     const usedKeyImageID = this.keyImages[hash(rp.keyImage)]
-    console.log(hash(rp.keyImage), rp.keyImage.toString(), usedKeyImageID)
     if (usedKeyImageID) {
       const spentFund = this.transactions[usedKeyImageID]
       if (spentFund.spent) {
@@ -325,13 +324,14 @@ class TXHandler {
 
   collectAmount(goalAmount) {
     let amount = bigInt[0]
-    const funds = []
-    for(const fundId of this.funds) {
+    const goalFunds = []
+    const funds = this.funds
+    for(const fundId of funds) {
       const fund = this.transactions[fundId]
       if (!fund.confirmed || fund.spent) {
         continue
       }
-      funds.push(fund.tx)
+      goalFunds.push(fund.tx)
       amount = amount.plus(fund.tx.receiverData.amount)
 
       if (amount.geq(goalAmount)) {
@@ -342,7 +342,7 @@ class TXHandler {
       return null
     }
     return {
-      funds,
+      funds: goalFunds,
       amount
     }
   }
@@ -365,7 +365,7 @@ class TXHandler {
   }
 
   createMint(amount) {
-    return TXHandler.cleanTx(this.wallet.createTransaction(this.wallet.masterKey, amount, true))
+    return TXHandler.cleanTx(this.wallet.createTransaction(this.wallet.masterKey, amount, "", true))
     /*const rand = bigInt.randBetween(0, bigInt[2].pow(256)).mod(pt.q)
     const pubKey =
 
@@ -389,17 +389,21 @@ class TXHandler {
     }
     const funds = collection.funds
     const fundsAmount = collection.amount
-    const tx = this.wallet.createTransaction(pubKey, amount)
-    const change = this.wallet.createTransaction(this.wallet.masterKey, fundsAmount - amount - minerFee)
+    const tx = this.wallet.createTransaction(pubKey, amount, "")
+    const change = this.wallet.createTransaction(this.wallet.masterKey, fundsAmount - amount - minerFee, "")
     const outs = Math.random() > 0.5 ? [tx, change] : [change, tx]
     const outputInfo = [
       outs.map(a => a.dest),
       outs.map(a => a.src),
       outs.map(a => a.commitment),
       outs.map(a => a.commitmentAmount),
-      minerFee
     ]
-    const outputHash = hash(...outputInfo)
+    const msg = (outs[0] == tx ? "00" : "01") + tx.encryptedMsg
+
+    const formatMsg = [msg]
+    formatMsg.bytes = true
+
+    const outputHash = hash(...outputInfo, formatMsg)
     // Formatted FullTx: wallet.formatArguments(...outputInfo)
     let blindingSum = outs.reduce((a, b) => a.plus(b.senderData.blindingKey), bigInt[0])
     const ringProofs = []
@@ -419,6 +423,7 @@ class TXHandler {
       ringProofs,
       outputs: outs,
       minerFee,
+      msg,
     }
     fullTX.toJSON = function() {
       return {
@@ -429,6 +434,7 @@ class TXHandler {
         }),
         outputs: this.outputs.map(TXHandler.cleanTx),
         minerFee: this.minerFee,
+        msg: msg,
       }
     }
     return fullTX
