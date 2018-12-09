@@ -65,7 +65,7 @@ contract MonereumBlockchain is MonereumMemory {
         mv = MonereumVerifier(MV);
     }
 
-    event RingGroupCommitted(uint256 ringGroupHash);
+    event LogRingGroupCommitted(uint256 ringGroupHash);
 
     function commitRingGroup(
         uint256[] outputIDs,
@@ -92,7 +92,7 @@ contract MonereumBlockchain is MonereumMemory {
         }
         setRingGroupInfo(ringGroupHash, 0, 0, 0);
 
-        emit RingGroupCommitted(ringGroupHash);
+        emit LogRingGroupCommitted(ringGroupHash);
 
         // Claim gas
         goodRingGroupBountyHolders[ringGroupHash] = 0;
@@ -180,6 +180,7 @@ contract MonereumBlockchain is MonereumMemory {
         uint256 R;
         uint256 i;
         uint256 j;
+        uint256 minerFee;
         uint256 commitmentHash;
         uint256 ring;
         uint256 bounty;
@@ -239,8 +240,8 @@ contract MonereumBlockchain is MonereumMemory {
         uint256[2][] outputDests,
         uint256[2][] outputSrcs,
         uint256[2][] outputCommitments,
-        uint256[] commitmentAmounts,
-        uint256 minerFee,
+        uint256[] outputAmounts,
+        bytes outputMsgs,
         // Miner
         uint256[2] minerDest
     ) public {
@@ -249,22 +250,24 @@ contract MonereumBlockchain is MonereumMemory {
         Variables memory v;
 
         v.R = funds.length;
+        require(v.R > 0 && v.R < 5, "Only 1...4 rings are allowed");
         require(keyImage.length == v.R);
         require(commitment.length == v.R);
         require(borromean.length == v.R);
         require(imageFundProofs.length == v.R);
         require(commitmentProofs.length == v.R);
-        require(v.R > 0 && v.R < 5, "Only 1...4 rings are allowed");
 
         v.numOutputs = outputDests.length;
+        require(v.numOutputs > 0 && v.numOutputs < 5, "Only 1...4 outputs are allowed");
         require(outputSrcs.length == v.numOutputs);
         require(outputCommitments.length == v.numOutputs);
-        require(v.numOutputs > 0 && v.numOutputs < 5, "Only 1...4 outputs are allowed");
+        require(outputAmounts.length == v.numOutputs + 1);
+        v.minerFee = outputAmounts[v.numOutputs];
 
         v.outputHash = uint256(keccak256(
             // encodePacked loses length information so we must use .encode everywhere
             // otherwise outputsDests[-1] could be shifted into outputSrcs[0] with same hash
-            abi.encode(outputDests, outputSrcs, outputCommitments, commitmentAmounts, minerFee)
+            abi.encode(outputDests, outputSrcs, outputCommitments, outputAmounts, outputMsgs)
         ));
 
         v.ringHashes = new uint256[](v.R);
@@ -315,7 +318,8 @@ contract MonereumBlockchain is MonereumMemory {
         emit LogRingGroup(
             v.ringGroupHash,
             v.outputIDs,
-            v.ringHashes
+            v.ringHashes,
+            outputMsgs
         );
 
         for ( v.ring = 0; v.ring < v.R; v.ring++ ) {
@@ -335,9 +339,9 @@ contract MonereumBlockchain is MonereumMemory {
                 outputSrcs[v.i],
                 outputDests[v.i],
                 outputCommitments[v.i],
-                commitmentAmounts[v.i]
+                outputAmounts[v.i]
             );
-            require(commitmentAmounts[v.i] < q, "commitmentAmount is not in Q");
+            require(outputAmounts[v.i] < q, "commitmentAmount is not in Q");
             v.commitmentHash = hashP(outputCommitments[v.i]);
             for ( v.j = 0; v.j < v.i; v.j++) {
                 require(v.commitmentHash != hashP(outputCommitments[v.j]), "Each output commitment must be unique");
@@ -349,10 +353,10 @@ contract MonereumBlockchain is MonereumMemory {
         v.rangeProofCommitmentCheck &= rangeCommitmentCheckBitMask;
         setRingGroupInfo(v.ringGroupHash, v.rangeProofCommitmentCheck, v.numOutputs, 0);
 
-        if (minerFee == 0) {
+        if (v.minerFee == 0) {
             v.minerFeeCommitment = [uint256(0), uint256(0)];
         } else {
-            v.minerFeeCommitment = minerFeeH[minerFee];
+            v.minerFeeCommitment = minerFeeH[v.minerFee];
             require(v.minerFeeCommitment[0] != 0, "Miner Fee has not been calculated yet");
         }
         require(v.commitmentSum[0] == v.minerFeeCommitment[0], "Commitment sum failed; Does not sum to zero");
@@ -366,7 +370,7 @@ contract MonereumBlockchain is MonereumMemory {
             [uint256(0), uint256(0)],
             minerDest,
             v.minerFeeCommitment,
-            minerFee
+            v.minerFee
         );
 
         v.sender = msg.sender;
@@ -386,7 +390,8 @@ contract MonereumBlockchain is MonereumMemory {
     event LogRingGroup(
         uint256 ringGroupHash,
         uint256[] outputIDs,
-        uint256[] ringHashes
+        uint256[] ringHashes,
+        bytes outputMsgs
     );
 
     event LogRingProof(
@@ -419,7 +424,12 @@ contract MonereumBlockchain is MonereumMemory {
             commitment,
             amount
         );
+        emit LogMintTransaction(transactionID);
     }
+
+    event LogMintTransaction(
+        uint256 transactionID
+    );
 
     // ===
     // Dispute Handling
@@ -571,7 +581,7 @@ contract MonereumBlockchain is MonereumMemory {
     // Requires rangeProofHash to be not actively disputed
     // ---------------------------------------------------
     // Sets ringGroupHash to disputed
-    // Sets rangeProof's disputer to msg.sender (It is now 'actively disputed')
+    // Sets rangeProof's disputer to msg.sender (Causes it to be considered 'actively disputed')
     // Reduces disputer's balance by badRingBountyAmount
     // =================================================
     function disputeRingProof(
