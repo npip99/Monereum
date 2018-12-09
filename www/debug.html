@@ -34,11 +34,11 @@
           <br/>
           <input type="submit" name="submit">
         </form>
-        <h2>Result</h2>
-        <p id="log"></p>
-        <textarea id="result" name="result" rows="8" cols="80">
-        </textarea>
-        <div id="wallet_form">
+        <div id="wallet_form" style="display: none;">
+          <h2>Result</h2>
+          <p id="log"></p>
+          <textarea id="result" name="result" rows="8" cols="80">
+          </textarea>
           <h2>Wallet</h2>
           <form onsubmit="getPublicKey(event)">
             <h3>Get Public Key</h3>
@@ -66,7 +66,7 @@
             <input type="submit" name="submit">
           </form>
         </div>
-        <div id="miner_form">
+        <div id="miner_form" style="display: none;">
           <h2>Miner</h2>
           <form onsubmit="mintTx(event)">
             <h3>Mint</h3>
