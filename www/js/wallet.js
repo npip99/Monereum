@@ -35,7 +35,7 @@ class Wallet {
     this.spendPubs = {}
     this.masterKey = this.getKey()
 
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 150; i++) {
       this.generateKey()
     }
   }

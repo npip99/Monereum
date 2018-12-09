@@ -153,10 +153,11 @@ class Miner {
     const outputAmounts = tx.outputs.map(a => a.commitmentAmount)
     outputAmounts.push(tx.minerFee)
 
-    const outputMsgs = [tx.msg]
+    const outputMsgs = [tx.msgData]
     outputMsgs.bytes = true
 
     const outputHash = hash(outputDests, outputSrcs, outputCommitments, outputAmounts, outputMsgs)
+    
     // Format ring proofs and calculate ring hashes
     const ringProofs = []
     const ringHashes = []

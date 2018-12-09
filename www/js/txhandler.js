@@ -348,7 +348,7 @@ class TXHandler {
     if (tx.receiverData) {
       if (msgData) {
         const msgHex = this.wallet.tryDecryptMsgData(msgData, tx)
-        if (msgHex) {
+        if (typeof msgHex === "string") {
           console.log("Msg Decrypted: ", msgHex)
           tx.receiverData.msg = msgHex
         }
@@ -472,7 +472,7 @@ class TXHandler {
       ringProofs,
       outputs: outs,
       minerFee,
-      msg,
+      msgData,
     }
     fullTX.toJSON = function() {
       return {
@@ -483,7 +483,7 @@ class TXHandler {
         }),
         outputs: this.outputs.map(TXHandler.cleanTx),
         minerFee: this.minerFee,
-        msg: msg,
+        msgData: this.msgData,
       }
     }
     return fullTX

@@ -46,8 +46,6 @@ window.addEventListener('load', async () => {
     const log = document.getElementById("log")
     let refreshTimer = null
 
-    window.m = new miner(new wallet("miner" + Math.random()), window.web3)
-
     changePerson = e => {
       e.preventDefault()
       const form = e.target
@@ -56,6 +54,7 @@ window.addEventListener('load', async () => {
         clearInterval(refreshTimer)
       }
       if (id === 0) {
+        window.m = new miner(new wallet("miner" + Math.random()), window.web3)
         document.getElementById("miner_form").style = "display: block;"
         document.getElementById("wallet_form").style = "display: none;"
       } else {
@@ -63,7 +62,7 @@ window.addEventListener('load', async () => {
         window.handler = new txhandler(person, window.web3)
         handler.addReceiveHandler(tx => {
           let msgDisplay = ""
-          if (tx.receiverData.msg) {
+          if (typeof tx.receiverData.msg === "string") {
             msgDisplay = " | " + hexToStr(tx.receiverData.msg)
           }
           log.innerHTML += "Received " + tx.receiverData.amount + msgDisplay + " (" + tx.id.toString(16) + ")" + "<br/>"
