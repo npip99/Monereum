@@ -115,6 +115,10 @@ class Wallet {
     return this.keys[this.nextKey]
   }
 
+  getMasterKey() {
+    return this.masterKey
+  }
+
   createTransaction(pubKey, amount, msg, noBlindingKey) {
     const rand = this.getRandom().mod(pt.q);
 		amount = bigInt(amount)

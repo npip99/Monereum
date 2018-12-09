@@ -411,7 +411,7 @@ class TXHandler {
   }
 
   createMint(amount) {
-    return TXHandler.cleanTx(this.wallet.createTransaction(this.wallet.masterKey, amount, "Minted", true))
+    return TXHandler.cleanTx(this.wallet.createTransaction(this.wallet.getMasterKey(), amount, "Minted", true))
   }
 
   createFullTx(pubKey, amount, minerFee, msgHex) {
@@ -425,7 +425,7 @@ class TXHandler {
     const funds = collection.funds
     const fundsAmount = collection.amount
     const tx = this.wallet.createTransaction(pubKey, amount, msgHex)
-    const change = this.wallet.createTransaction(this.wallet.masterKey, fundsAmount - amount - minerFee, strToHex("Spare Change"))
+    const change = this.wallet.createTransaction(this.wallet.getMasterKey(), fundsAmount - amount - minerFee, strToHex("Spare Change"))
 
     const outs = Math.random() > 0.5 ? [tx, change] : [change, tx]
 
