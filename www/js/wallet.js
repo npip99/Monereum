@@ -42,7 +42,7 @@ class Wallet {
 
   static encrypt(msg, key) {
     const keyBytes = aes.utils.hex.toBytes(hash.padItem(key.toString(16)))
-    const msgBytes = aes.utils.utf8.toBytes(msg)
+    const msgBytes = aes.utils.hex.toBytes(msg)
 
     const aesCtr = new aes.ModeOfOperation.ctr(keyBytes)
     const encryptedBytes = aesCtr.encrypt(msgBytes)
@@ -59,7 +59,7 @@ class Wallet {
     const aesCtr = new aes.ModeOfOperation.ctr(keyBytes)
     const msgBytes = aesCtr.decrypt(encryptedBytes)
 
-    const msg = aes.utils.utf8.fromBytes(msgBytes)
+    const msg = aes.utils.hex.fromBytes(msgBytes)
 
     return msg
   }

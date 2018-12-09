@@ -33,6 +33,9 @@ window.addEventListener('load', async () => {
         return;
     }
 
+    const strToHex = s => aes.utils.hex.fromBytes(aes.utils.utf8.toBytes(s))
+    const hexToStr = h => aes.utils.utf8.fromBytes(aes.utils.hex.toBytes(h))
+
     window.constants = constants
     window.aes = aes
     window.pt = pt
@@ -61,7 +64,7 @@ window.addEventListener('load', async () => {
         handler.addReceiveHandler(tx => {
           let msgDisplay = ""
           if (tx.receiverData.msg) {
-            msgDisplay = " | " + tx.receiverData.msg
+            msgDisplay = " | " + hexToStr(tx.receiverData.msg)
           }
           log.innerHTML += "Received " + tx.receiverData.amount + msgDisplay + " (" + tx.id.toString(16) + ")" + "<br/>"
         })
@@ -106,7 +109,8 @@ window.addEventListener('load', async () => {
       const form = e.target
       const pubKey = form.elements.to.value
       const amount = form.elements.amount.value
-      result.innerHTML = JSON.stringify(handler.createFullTx(parser.parseJSONKey(JSON.parse(pubKey)), amount, 3))
+      const msg = form.elements.msg.value
+      result.innerHTML = JSON.stringify(handler.createFullTx(parser.parseJSONKey(JSON.parse(pubKey)), amount, 3, strToHex(msg)))
     }
 
     mintTx = e => {

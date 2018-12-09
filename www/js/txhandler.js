@@ -4,6 +4,9 @@ const hash = require('./hash')
 const pt = require('./ecc-point')
 const parser = require('./parser')
 const constants = require('./constants')
+const aes = require('aes-js')
+
+const strToHex = s => aes.utils.hex.fromBytes(aes.utils.utf8.toBytes(s))
 
 class TXHandler {
   constructor(wallet, web3) {
@@ -411,7 +414,7 @@ class TXHandler {
     return TXHandler.cleanTx(this.wallet.createTransaction(this.wallet.masterKey, amount, "Minted", true))
   }
 
-  createFullTx(pubKey, amount, minerFee) {
+  createFullTx(pubKey, amount, minerFee, msgHex) {
     amount = bigInt(amount)
     minerFee = bigInt(minerFee)
     const collection = this.collectAmount(amount.plus(minerFee))
@@ -421,8 +424,8 @@ class TXHandler {
     }
     const funds = collection.funds
     const fundsAmount = collection.amount
-    const tx = this.wallet.createTransaction(pubKey, amount, "Secret Msg")
-    const change = this.wallet.createTransaction(this.wallet.masterKey, fundsAmount - amount - minerFee, "Spare Change")
+    const tx = this.wallet.createTransaction(pubKey, amount, msgHex)
+    const change = this.wallet.createTransaction(this.wallet.masterKey, fundsAmount - amount - minerFee, strToHex("Spare Change"))
 
     const outs = Math.random() > 0.5 ? [tx, change] : [change, tx]
 
