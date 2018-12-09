@@ -70,19 +70,25 @@ class TXHandler {
     })
 
     const transactionListener = createTopicFilter(constants.transactionTopic)
+    const mintTransactionListener = createTopicFilter(constants.mintTransactionTopic)
     const ringGroupListener = createTopicFilter(constants.ringGroupTopic)
     const ringProofListener = createTopicFilter(constants.ringProofTopic)
     const rangeProofListener = createTopicFilter(constants.rangeProofTopic)
-    const committedRingGroupListener = createTopicFilter(constants.ringGroupCommittedTopic)
+    const committedRingGroupListener = createTopicFilter(constants.committedRingGroupTopic)
 
     let transactionResults
     let ringGroupResults
     let ringProofResults
     let rangeProofResults
     let committedRingGroupResults
+    let mintTransactionResults
 
     transactionListener.get((error, result) => {
       transactionResults = result
+    })
+
+    mintTransactionListener.get((error, result) => {
+      mintTransactionResults = result
     })
 
     ringGroupListener.get((error, result) => {
@@ -108,6 +114,9 @@ class TXHandler {
       clearInterval(this.interval)
       for (const transactionResult of transactionResults) {
         this.handleTransactionResult(transactionResult)
+      }
+      for (const mintTransactionResult of mintTransactionResults) {
+        this.handleMintTransactionResult(mintTransactionResult)
       }
       for (const ringGroupResult of ringGroupResults) {
         this.handleRingGroupResult(ringGroupResult)
@@ -149,18 +158,21 @@ class TXHandler {
     if (txData.tx) {
       return
     }
-    console.log("Transaciton Received: ", result.transactionHash, tx.id.toString())
-    // console.log("Transaction Received: ", JSON.stringify(tx, null, '\t'))
+    console.log("Transaciton Received: ", tx.id.toString(16), "(" + result.transactionHash + ")")
     txData.tx = tx
     this.wallet.tryDecryptTransaction(tx)
     if (tx.receiverData) {
       console.log("Transaction Decrypted")
       this.keyImages[hash(tx.dest.hashInP().times(tx.receiverData.privKey).affine())] = tx.id
     }
-    if (this.minting) {
-      txData.confirmed = result.blockNumber
-      this.tryAddToFunds(tx)
-    }
+  }
+
+  handleMintTransactionResult(result) {
+    const txId = parser.parseMintTransaction(parser.initParser(result.data))
+    console.log("Transaction Minted: ", txId.toString(16))
+    const txData = this.transactions[txId]
+    this.tryAddToFunds(txData.tx)
+    txData.confirmed = result.blockNumber
   }
 
   handleRingGroupResult(result) {
@@ -168,14 +180,14 @@ class TXHandler {
     if (this.ringGroups[ringGroup.ringGroupHash]) {
       return
     }
-    console.log(ringGroup.msgHex)
-    console.log("Ring Group Received: ", result.transactionHash)
+    console.log("Ring Group Received: ", ringGroup.ringGroupHash.toString(16), "(" + result.transactionHash + ")")
+    console.log("Message received: ", ringGroup.msgHex)
     // console.log("Ring Group Received: ", JSON.stringify(ringGroup, null, '\t'))
     const ringGroupData = this.initRingGroup(ringGroup.ringGroupHash)
     for (const outputID of ringGroup.outputIDs) {
       const txData = this.transactions[outputID]
       if (!txData) {
-        console.error("Ring Group without Tx! ", ringGroup.ringGroupHash.toString(), outputID.toString(), result)
+        console.error("Ring Group without Tx! ", ringGroup.ringGroupHash.toString(16), outputID.toString(16), result)
         return
       }
       txData.ringGroupHash = ringGroup.ringGroupHash
@@ -197,7 +209,8 @@ class TXHandler {
       console.error("Ring Group not filled yet")
       return
     }
-    console.log("Ring Proof Received: ", result.transactionHash)
+    console.log("Ring Proof Received: ", rp.ringHash.toString(16), "(" + result.transactionHash + ")")
+    console.log("Ring Proof is for Ring Group: ", ringGroupHash.toString(16))
     // console.log("Ring Proof Received: ", JSON.stringify(rp, null, '\t'))
     const ringGroupData = this.ringGroups[ringGroupHash]
     for (const ringProof of ringGroupData.ringProofs) {
@@ -262,10 +275,12 @@ class TXHandler {
       }
       ringGroupData.pendingResult &= verificationResult
     }
-    console.log("Range Proof Received: ", result.transactionHash)
+    console.log("Range Proof Received (" + result.transactionHash + ")")
+    console.log("Range Proof is for Ring Group: ", ringGroupData.ringGroup.ringGroupHash.toString(16))
+    console.log("Range Proofs Remaining: ", ringGroupData.ringGroup.outputIDs.length - 1 - ringGroupData.rangeProofs.length)
     // console.log("Range Proof Received: ", JSON.stringify(rp, null, '\t'))
     if (ringGroupData.rangeProofs.length === ringGroupData.ringGroup.outputIDs.length - 1) {
-      console.log("Ring Group complete: ", ringGroupData.ringGroup.ringGroupHash.toString());
+      console.log("Ring Group complete!");
       ringGroupData.isValid = ringGroupData.pendingResult
       ringGroupData.pendingResult = undefined
       if (ringGroupData.isValid) {
@@ -286,7 +301,7 @@ class TXHandler {
     const c = parser.parseCommittedRingGroup(parser.initParser(result.data))
     const ringGroupData = this.ringGroups[c.ringGroupHash]
     if (!ringGroupData) {
-      console.error("Ring Group Committed without Ring Group! ", c.ringGroupHash.toString())
+      console.error("Ring Group Committed without Ring Group! ", c.ringGroupHash.toString(16))
       console.log(result)
       return
     }
@@ -298,7 +313,7 @@ class TXHandler {
       console.error("Ring Group Validity Discrepancy")
       return
     }
-    console.log("Ring Group Confirmed: ", c.ringGroupHash.toString(), " @ ", result.blockNumber)
+    console.log("Ring Group Confirmed: ", c.ringGroupHash.toString(16), " @ ", result.blockNumber)
     ringGroupData.confirmed = result.blockNumber
     for (const outputID of ringGroupData.ringGroup.outputIDs) {
       this.transactions[outputID].confirmed = result.blockNumber

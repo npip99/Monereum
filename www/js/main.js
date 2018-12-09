@@ -57,7 +57,10 @@ window.addEventListener('load', async () => {
         window.person = new wallet("Person #" + id)
         window.handler = new txhandler(person, window.web3)
         handler.addDecryptHandler(tx => {
-          log.innerHTML += JSON.stringify(tx, null, '\t')
+          log.innerHTML += JSON.stringify({
+            id: tx.id,
+            amount: tx.receiverData.amount,
+          }, null, '\t')
         })
         const numKeys = parseInt(form.elements.numKeys.value) || 0
         for (let i = 0; i < numKeys; i++) {

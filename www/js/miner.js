@@ -32,7 +32,7 @@ class Miner {
       const {ringGroupHash, outputIDs, ringHashes} = parser.parseRingGroup(parser.initParser(result.data))
       const ringGroupData = this.pending[ringGroupHash]
       if (ringGroupData) {
-        console.log("Ring Group recognized: ", ringGroupHash.toString())
+        console.log("Ring Group Recognized: ", ringGroupHash.toString(16))
         const rangeProofs = ringGroupData.rangeProofs
         this.rangeProofsRemaining[ringGroupHash] = rangeProofs.length
         const func = hash.funcHash("logRangeProof(uint256[],uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")
@@ -65,7 +65,7 @@ class Miner {
       this.watched[result.transactionHash] = true
       const rangeProof = parser.parseRangeProof(parser.initParser(result.data))
       if (this.rangeProofsRemaining[rangeProof.ringGroupHash]) {
-        console.log("Range Proof of ", rangeProof.ringGroupHash.toString(), " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
+        console.log("Range Proof of ", rangeProof.ringGroupHash.toString(16), " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
         if((--this.rangeProofsRemaining[rangeProof.ringGroupHash]) == 0) {
           setTimeout(() => {
             const {outputIDs, ringHashes, rangeHashes} = this.pending[rangeProof.ringGroupHash]
@@ -99,9 +99,9 @@ class Miner {
         gasPrice: 5e9,
     }, (error, hash) => {
       if (error) {
-        console.error("Mint failed: ", error)
+        console.error("Mint Failed: ", error)
       } else {
-        console.log("Mint succeeded: ", hash)
+        console.log("Mint Succeeded: ", hash)
       }
     })
   }
