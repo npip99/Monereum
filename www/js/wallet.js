@@ -64,14 +64,14 @@ class Wallet {
     return msg
   }
 
-  decryptMsgHex(msgHex, tx) {
+  tryDecryptMsgData(msgData, tx) {
     const msgInfoSecret = hash(tx.receiverData.secret.minus(1))
     for (let i = 0; i < 5; i++) {
-      const msgInfoEncrypted = bigInt(msgHex.slice(2*8*i,2*8*(i+1)), 16)
+      const msgInfoEncrypted = bigInt(msgData.slice(2*8*i,2*8*(i+1)), 16)
       const msgLen = msgInfoSecret.xor(msgInfoEncrypted).shiftRight(32).and(bigInt[1].shiftLeft(32).minus(1))
       const msgPos = msgInfoSecret.xor(msgInfoEncrypted).and(bigInt[1].shiftLeft(32).minus(1))
-      if (msgPos.plus(msgLen).leq(msgHex.length / 2)) {
-        const msgEncrypted = msgHex.slice(msgPos.toJSNumber() * 2, (msgPos.toJSNumber() + msgLen.toJSNumber()) * 2)
+      if (msgPos.plus(msgLen).leq(msgData.length / 2)) {
+        const msgEncrypted = msgData.slice(msgPos.toJSNumber() * 2, (msgPos.toJSNumber() + msgLen.toJSNumber()) * 2)
         const msgDecrypted = Wallet.decrypt(msgEncrypted, tx.receiverData.secret)
         return msgDecrypted
       }

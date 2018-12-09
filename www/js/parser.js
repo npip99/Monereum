@@ -161,12 +161,12 @@ class Parser {
       ringHashes.push(Parser.parseNum(parser))
     }
     const numBytes = Parser.parseNum(parser)
-    const msgHex = Parser.parseHex(parser, numBytes.toJSNumber())
+    const msgData = Parser.parseHex(parser, numBytes.toJSNumber())
     const rg = {
       ringGroupHash,
       outputIDs,
       ringHashes,
-      msgHex,
+      msgData,
     }
     return rg
   }

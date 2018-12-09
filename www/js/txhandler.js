@@ -200,7 +200,7 @@ class TXHandler {
       return
     }
     console.log("Ring Group Received: ", ringGroup.ringGroupHash.toString(16), "(" + result.transactionHash + ")")
-    console.log("Message received: ", ringGroup.msgHex)
+    console.log("Message Received: ", ringGroup.msgData)
     // console.log("Ring Group Received: ", JSON.stringify(ringGroup, null, '\t'))
     this.initRingGroup(ringGroup.ringGroupHash)
     const ringGroupData = this.getRingGroup(ringGroup.ringGroupHash)
@@ -315,7 +315,7 @@ class TXHandler {
             return
           }
           txData.isValid = true
-          this.tryAddToFunds(txData.tx, ringGroupData.ringGroup.msgHex)
+          this.tryAddToFunds(txData.tx, ringGroupData.ringGroup.msgData)
         }
       }
     }
@@ -344,13 +344,13 @@ class TXHandler {
     }
   }
 
-  tryAddToFunds(tx, msgHex) {
+  tryAddToFunds(tx, msgData) {
     if (tx.receiverData) {
-      if (msgHex) {
-        const msg = this.wallet.decryptMsgHex(msgHex, tx)
-        if (msg) {
-          console.log("Msg Decrypted: ", msg)
-          tx.receiverData.msg = msg
+      if (msgData) {
+        const msgHex = this.wallet.tryDecryptMsgData(msgData, tx)
+        if (msgHex) {
+          console.log("Msg Decrypted: ", msgHex)
+          tx.receiverData.msg = msgHex
         }
       }
       this.funds.push(tx.id)
@@ -440,9 +440,9 @@ class TXHandler {
       msgPos += msgLen
       msgHeap += output.senderData.encryptedMsg
     }
-    const msg = msgLocations + msgHeap
+    const msgData = msgLocations + msgHeap
 
-    const formatMsg = [msg]
+    const formatMsg = [msgData]
     formatMsg.bytes = true
 
     const outputInfo = [
