@@ -26,14 +26,18 @@ class Wallet {
     this.masterView = hash(this.masterSeed).mod(pt.q)
     this.msgKey = hash(this.masterSeed.plus(1))
     this.privSeed = hash(this.masterSeed.plus(2))
-    this.sentSeed = hash(this.masterSeed.plus(3))
-    this.seed = hash(this.masterSeed.plus(4))
+    this.seed = hash(this.masterSeed.plus(4).xor(bigInt(Math.round(Math.random()*1000000000))))
 
+    this.nextKey = 0
     this.keys = []
     this.funds = []
     this.sent = []
     this.spendPubs = {}
-    this.masterKey = this.generateKey()
+    this.masterKey = this.getKey()
+
+    for (let i = 0; i < 100; i++) {
+      this.generateKey()
+    }
   }
 
   saveWallet() {
@@ -104,10 +108,15 @@ class Wallet {
     return key;
   }
 
-  createTransaction(pubKey, amount, msg, noBlindingKey) {
-    this.sentSeed = hash(this.sentSeed.xor(this.masterSeed));
+  getKey() {
+    if (!this.keys[this.nextKey]) {
+      this.generateKey()
+    }
+    return this.keys[this.nextKey]
+  }
 
-    const rand = this.sentSeed.mod(pt.q);
+  createTransaction(pubKey, amount, msg, noBlindingKey) {
+    const rand = this.getRandom().mod(pt.q);
 		amount = bigInt(amount)
     const tx = {}
     const generatorVal = hash(pubKey.spendPub).and(bigInt[1].shiftLeft(64).minus(1))

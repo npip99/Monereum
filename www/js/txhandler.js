@@ -115,7 +115,7 @@ class TXHandler {
     })
 
     this.interval = setInterval(() => {
-      if (!transactionResults || !ringGroupResults || !ringProofResults || !rangeProofResults || !committedRingGroupResults || !mintTransactionResults) {
+      if (!transactionResults || !mintTransactionResults || !ringGroupResults || !ringProofResults || !rangeProofResults || !committedRingGroupResults) {
         return
       }
       clearInterval(this.interval)
@@ -189,9 +189,9 @@ class TXHandler {
     const txId = parser.parseMintTransaction(parser.initParser(result.data))
     console.log("Transaction Minted: ", txId.toString(16))
     const txData = this.getTx(txId)
-    this.tryAddToFunds(txData.tx)
     txData.confirmed = result.blockNumber
     txData.isValid = true
+    this.tryAddToFunds(txData.tx)
   }
 
   handleRingGroupResult(result) {

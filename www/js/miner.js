@@ -142,7 +142,7 @@ class Miner {
 
   formatSubmit(tx) {
     // Collect miner fee data
-    const minerPub = this.wallet.generateKey()
+    const minerPub = this.wallet.getKey()
     const minerTx = this.wallet.createTransaction(minerPub, tx.minerFee, true)
     const minerDest = minerTx.dest
 
