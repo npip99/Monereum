@@ -4,6 +4,7 @@ const hash = require('./hash')
 const pt = require('./ecc-point')
 const txhandler = require('./txhandler')
 const miner = require('./miner')
+const constants = require('./constants')
 const parser = require('./parser')
 const aes = require('aes-js')
 
@@ -32,6 +33,7 @@ window.addEventListener('load', async () => {
         return;
     }
 
+    window.constants = constants
     window.aes = aes
     window.pt = pt
     window.bigInt = bigInt
@@ -56,8 +58,15 @@ window.addEventListener('load', async () => {
       } else {
         window.person = new wallet("Person #" + id)
         window.handler = new txhandler(person, window.web3)
-        handler.addDecryptHandler(tx => {
-          log.innerHTML += "Received " + tx.receiverData.amount + " (" + tx.id.toString(16) + ")" + "<br/>"
+        handler.addReceiveHandler(tx => {
+          let msgDisplay = ""
+          if (tx.receiverData.msg) {
+            msgDisplay = " | " + tx.receiverData.msg
+          }
+          log.innerHTML += "Received " + tx.receiverData.amount + msgDisplay + " (" + tx.id.toString(16) + ")" + "<br/>"
+        })
+        handler.addSpendHandler(tx => {
+          log.innerHTML += "Spent " + tx.receiverData.amount + " (" + tx.id.toString(16) + ")" + "<br/>"
         })
         const numKeys = parseInt(form.elements.numKeys.value) || 0
         for (let i = 0; i < numKeys; i++) {

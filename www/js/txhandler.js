@@ -49,8 +49,12 @@ class TXHandler {
 
   }
 
-  addDecryptHandler(h) {
-    this.decryptHandler = h
+  addReceiveHandler(h) {
+    this.receiveHandler = h
+  }
+
+  addSpendHandler(h) {
+    this.spendHandler = h
   }
 
   sync(block) {
@@ -108,7 +112,7 @@ class TXHandler {
     })
 
     this.interval = setInterval(() => {
-      if (!transactionResults || !ringGroupResults || !ringProofResults || !rangeProofResults || !committedRingGroupResults) {
+      if (!transactionResults || !ringGroupResults || !ringProofResults || !rangeProofResults || !committedRingGroupResults || !mintTransactionResults) {
         return
       }
       clearInterval(this.interval)
@@ -233,11 +237,14 @@ class TXHandler {
     }
     const usedKeyImageID = this.keyImages[hash(rp.keyImage).toString(16)]
     if (usedKeyImageID) {
-      const spentFund = this.getTx(usedKeyImageID)
-      if (spentFund.spent) {
+      const spentFundData = this.getTx(usedKeyImageID)
+      if (spentFundData.spent) {
         console.error("Double spent!", result)
       }
-      spentFund.spent = true
+      spentFundData.spent = true
+      if (this.spendHandler) {
+        this.spendHandler(spentFundData.tx)
+      }
     }
     const funds = []
     for (const fund of rp.funds) {
@@ -305,7 +312,7 @@ class TXHandler {
             return
           }
           txData.isValid = true
-          this.tryAddToFunds(txData.tx)
+          this.tryAddToFunds(txData.tx, ringGroupData.ringGroup.msgHex)
         }
       }
     }
@@ -334,11 +341,18 @@ class TXHandler {
     }
   }
 
-  tryAddToFunds(tx) {
+  tryAddToFunds(tx, msgHex) {
     if (tx.receiverData) {
+      if (msgHex) {
+        const msg = this.wallet.decryptMsgHex(msgHex, tx)
+        if (msg) {
+          console.log("Msg Decrypted: ", msg)
+          tx.receiverData.msg = msg
+        }
+      }
       this.funds.push(tx.id)
-      if (this.decryptHandler) {
-        this.decryptHandler(tx)
+      if (this.receiveHandler) {
+        this.receiveHandler(tx)
       }
     }
   }
@@ -394,18 +408,7 @@ class TXHandler {
   }
 
   createMint(amount) {
-    return TXHandler.cleanTx(this.wallet.createTransaction(this.wallet.masterKey, amount, "", true))
-    /*const rand = bigInt.randBetween(0, bigInt[2].pow(256)).mod(pt.q)
-    const pubKey =
-
-		amount = bigInt(amount)
-    const tx = {}
-    tx.src = pt.g.times(rand).affine()
-    const secret = hash(pubKey.viewPub.times(rand).affine())
-    tx.dest = pt.g.times(secret).plus(pubKey.spendPub).affine()
-    tx.commitment = pt.h.times(amount).affine()
-    tx.commitmentAmount = amount
-    return tx;*/
+    return TXHandler.cleanTx(this.wallet.createTransaction(this.wallet.masterKey, amount, "Minted", true))
   }
 
   createFullTx(pubKey, amount, minerFee) {
@@ -418,22 +421,36 @@ class TXHandler {
     }
     const funds = collection.funds
     const fundsAmount = collection.amount
-    const tx = this.wallet.createTransaction(pubKey, amount, "")
-    const change = this.wallet.createTransaction(this.wallet.masterKey, fundsAmount - amount - minerFee, "")
+    const tx = this.wallet.createTransaction(pubKey, amount, "Secret Msg")
+    const change = this.wallet.createTransaction(this.wallet.masterKey, fundsAmount - amount - minerFee, "Spare Change")
+
     const outs = Math.random() > 0.5 ? [tx, change] : [change, tx]
-    const outputInfo = [
-      outs.map(a => a.dest),
-      outs.map(a => a.src),
-      outs.map(a => a.commitment),
-      outs.map(a => a.commitmentAmount),
-    ]
-    const msg = (outs[0] == tx ? "00" : "01") + tx.encryptedMsg
+
+    // Format Msgs
+    let msgLocations = ""
+    let msgHeap = ""
+    let msgPos = outs.length * 8
+    for (const output of outs) {
+      const indexSecret = hash(output.senderData.secret.minus(1))
+      const msgLen = output.senderData.encryptedMsg.length / 2
+      msgLocations += hash.padItem(indexSecret.xor(bigInt(msgLen).shiftLeft(32).plus(msgPos))).slice(64 - 2*8)
+      msgPos += msgLen
+      msgHeap += output.senderData.encryptedMsg
+    }
+    const msg = msgLocations + msgHeap
 
     const formatMsg = [msg]
     formatMsg.bytes = true
 
+    const outputInfo = [
+      outs.map(output => output.dest),
+      outs.map(output => output.src),
+      outs.map(output => output.commitment),
+      outs.map(output => output.commitmentAmount),
+    ]
+
     const outputHash = hash(...outputInfo, formatMsg)
-    // Formatted FullTx: wallet.formatArguments(...outputInfo)
+
     let blindingSum = outs.reduce((a, b) => a.plus(b.senderData.blindingKey), bigInt[0])
     const ringProofs = []
     for (const [i, fund] of funds.entries()) {

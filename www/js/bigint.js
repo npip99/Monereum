@@ -9,7 +9,7 @@ class NativeBigIntClass {
     if (base === undefined) {
       this.value = BigInt(val)
     } else if (base === 16) {
-      this.value = BigInt("0x" + val)
+      this.value = BigInt("0x0" + val)
     } else {
       throw "Invalid base: " + base
     }
@@ -121,6 +121,11 @@ class NativeBigIntClass {
   geq(v) {
     v = NativeBigInt(v)
     return this.value >= v.value
+  }
+
+  leq(v) {
+    v = NativeBigInt(v)
+    return this.value <= v.value
   }
 
   eq(v) {

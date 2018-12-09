@@ -21,16 +21,17 @@ tx:
 class Wallet {
   constructor(mnemonic) {
     this.mnemonic = mnemonic
+
     this.masterSeed = hash(mnemonic)
-    this.seed = hash(bigInt[0].plus(this.masterSeed))
-    // Generates private keys deterministically
-    this.privSeed = hash(bigInt[1].plus(this.masterSeed))
-    // Generates sending keys deterministically
-    this.sentSeed = hash(bigInt[2].plus(this.masterSeed))
+    this.masterView = hash(this.masterSeed).mod(pt.q)
+    this.msgKey = hash(this.masterSeed.plus(1))
+    this.privSeed = hash(this.masterSeed.plus(2))
+    this.sentSeed = hash(this.masterSeed.plus(3))
+    this.seed = hash(this.masterSeed.plus(4))
+
     this.keys = []
     this.funds = []
     this.sent = []
-    this.masterView = hash(this.masterSeed.plus(3)).mod(pt.q)
     this.spendPubs = {}
     this.masterKey = this.generateKey()
   }
@@ -39,7 +40,7 @@ class Wallet {
 
   }
 
-  encrypt(msg, key) {
+  static encrypt(msg, key) {
     const keyBytes = aes.utils.hex.toBytes(hash.padItem(key.toString(16)))
     const msgBytes = aes.utils.utf8.toBytes(msg)
 
@@ -51,7 +52,7 @@ class Wallet {
     return encryptedHex
   }
 
-  decrypt(encryptedHex, key) {
+  static decrypt(encryptedHex, key) {
     const keyBytes = aes.utils.hex.toBytes(hash.padItem(key.toString(16)))
     const encryptedBytes = aes.utils.hex.toBytes(encryptedHex)
 
@@ -61,6 +62,21 @@ class Wallet {
     const msg = aes.utils.utf8.fromBytes(msgBytes)
 
     return msg
+  }
+
+  decryptMsgHex(msgHex, tx) {
+    const msgInfoSecret = hash(tx.receiverData.secret.minus(1))
+    for (let i = 0; i < 5; i++) {
+      const msgInfoEncrypted = bigInt(msgHex.slice(2*8*i,2*8*(i+1)), 16)
+      const msgLen = msgInfoSecret.xor(msgInfoEncrypted).shiftRight(32).and(bigInt[1].shiftLeft(32).minus(1))
+      const msgPos = msgInfoSecret.xor(msgInfoEncrypted).and(bigInt[1].shiftLeft(32).minus(1))
+      if (msgPos.plus(msgLen).leq(msgHex.length / 2)) {
+        const msgEncrypted = msgHex.slice(msgPos.toJSNumber() * 2, (msgPos.toJSNumber() + msgLen.toJSNumber()) * 2)
+        const msgDecrypted = Wallet.decrypt(msgEncrypted, tx.receiverData.secret)
+        return msgDecrypted
+      }
+    }
+    return null
   }
 
   getRandom() {
@@ -107,8 +123,8 @@ class Wallet {
       blindingKey,
       amount,
       msg,
+      encryptedMsg: Wallet.encrypt(msg, secret),
     }
-    tx.encryptedMsg = this.encrypt("Hey!", secret)
     tx.commitment = pt.g.times(blindingKey).plus(pt.h.times(amount)).affine()
     tx.commitmentAmount = noBlindingKey ? amount : hash(blindingKey).plus(amount).mod(pt.q)
     return tx
