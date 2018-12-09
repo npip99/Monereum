@@ -1,4 +1,4 @@
-const bigInt = require('./bigint')
+const bigInt = require('big-integer')
 const wallet = require('./wallet')
 const hash = require('./hash')
 const pt = require('./ecc-point')
@@ -361,7 +361,7 @@ class TXHandler {
   }
 
   getPublicKey() {
-    const {spendPub, viewPub} = this.wallet.generateKey()
+    const {spendPub, viewPub} = this.wallet.getKey()
     return {
       spendPub,
       viewPub

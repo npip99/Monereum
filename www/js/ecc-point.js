@@ -1,5 +1,5 @@
 const hash = require("./hash");
-const bigInt = require('./bigint');
+const bigInt = require('big-integer')
 
 class ECCPoint {
 		static decompress(x, key) {

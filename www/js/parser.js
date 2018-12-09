@@ -1,4 +1,4 @@
-const bigInt = require('./bigint')
+const bigInt = require('big-integer')
 const pt = require('./ecc-point')
 const constants = require('./constants')
 const aes = require('aes-js')

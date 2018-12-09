@@ -3,7 +3,7 @@ const hash = require('./hash')
 const parser = require('./parser')
 const constants = require('./constants')
 const pt = require('./ecc-point')
-const bigInt = require('./bigint')
+const bigInt = require('big-integer')
 
 const zip = (arr, ...arrs) => {
   return arr.map((val, i) => arrs.reduce((a, arr) => [...a, arr[i]], [val]));
@@ -157,7 +157,7 @@ class Miner {
     outputMsgs.bytes = true
 
     const outputHash = hash(outputDests, outputSrcs, outputCommitments, outputAmounts, outputMsgs)
-    
+
     // Format ring proofs and calculate ring hashes
     const ringProofs = []
     const ringHashes = []

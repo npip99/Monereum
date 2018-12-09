@@ -1,6 +1,6 @@
-var CryptoJS = require('crypto-js');
-var sha3 = require('crypto-js/sha3');
-const bigInt = require('./bigint');
+var CryptoJS = require('crypto-js')
+var sha3 = require('crypto-js/sha3')
+const bigInt = require('big-integer')
 
 const leftPad = (s, goal, rep) => {
   const rem = goal - s.length
@@ -125,14 +125,6 @@ const hash = function() {
       outputLength: 256
   }).toString(), 16);
 }
-
-/*
-0x
-0000000000000000000000000000000000000000000000000000000000000005
-0000000000000000000000000000000000000000000000000000000000000040
-0000000000000000000000000000000000000000000000000000000000000003
-4865790000000000000000000000000000000000000000000000000000000000
-*/
 
 hash.format = format
 hash.funcHash = funcHash

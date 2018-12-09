@@ -1,5 +1,5 @@
 const pt = require('./ecc-point')
-const bigInt = require('./bigint')
+const bigInt = require('big-integer')
 const hash = require('./hash')
 const aes = require('aes-js')
 

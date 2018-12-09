@@ -1,5 +1,5 @@
 const wallet = require('./wallet')
-const bigInt = require('./bigint');
+const bigInt = require('big-integer')
 const hash = require('./hash')
 const pt = require('./ecc-point')
 const txhandler = require('./txhandler')
@@ -46,7 +46,7 @@ window.addEventListener('load', async () => {
     const log = document.getElementById("log")
     let refreshTimer = null
 
-    changePerson = e => {
+    changePerson = async e => {
       e.preventDefault()
       const form = e.target
       const id = parseInt(form.elements.id.value)
@@ -54,39 +54,50 @@ window.addEventListener('load', async () => {
         clearInterval(refreshTimer)
       }
       if (id === 0) {
-        window.m = new miner(new wallet("miner" + Math.random()), window.web3)
         document.getElementById("miner_form").style = "display: block;"
         document.getElementById("wallet_form").style = "display: none;"
+        window.m = new miner(new wallet("miner" + Math.random()), window.web3)
       } else {
-        window.person = new wallet("Person #" + id)
-        window.handler = new txhandler(person, window.web3)
-        handler.addReceiveHandler(tx => {
-          let msgDisplay = ""
-          if (typeof tx.receiverData.msg === "string") {
-            msgDisplay = " | " + hexToStr(tx.receiverData.msg)
-          }
-          log.innerHTML += "Received " + tx.receiverData.amount + msgDisplay + " (" + tx.id.toString(16) + ")" + "<br/>"
-        })
-        handler.addSpendHandler(tx => {
-          log.innerHTML += "Spent " + tx.receiverData.amount + " (" + tx.id.toString(16) + ")" + "<br/>"
-        })
-        const numKeys = parseInt(form.elements.numKeys.value) || 0
-        for (let i = 0; i < numKeys; i++) {
-          handler.getPublicKey()
-        }
-        window.web3.eth.getBlockNumber((error, result) => {
-          handler.sync(result)
-        })
-        refreshTimer = setInterval(() => {
-          window.web3.eth.getBlockNumber((error, result) => {
-            if (handler.doneSyncing) {
-              console.log("Syncing to: ", result)
-              handler.sync(result)
-            }
-          })
-        }, 1000)
         document.getElementById("miner_form").style = "display: none;"
         document.getElementById("wallet_form").style = "display: block;"
+        result.innerHTML = "Loading..."
+        log.innerHTML = ""
+        ;(async () => {
+          console.log("Here: ", document.getElementById("wallet_form").style.display)
+          window.person = new wallet("Person #" + id)
+          window.handler = new txhandler(person, window.web3)
+          handler.addReceiveHandler(tx => {
+            let msgDisplay = ""
+            if (typeof tx.receiverData.msg === "string") {
+              msgDisplay = " | " + hexToStr(tx.receiverData.msg)
+            }
+            log.innerHTML += "Received " + tx.receiverData.amount + msgDisplay + " (" + tx.id.toString(16) + ")" + "<br/>"
+          })
+          handler.addSpendHandler(tx => {
+            log.innerHTML += "Spent " + tx.receiverData.amount + " (" + tx.id.toString(16) + ")" + "<br/>"
+          })
+          const numKeys = parseInt(form.elements.numKeys.value) || 0
+          for (let i = 0; i < numKeys; i++) {
+            handler.getPublicKey()
+          }
+          window.web3.eth.getBlockNumber((error, result) => {
+            handler.sync(result)
+          })
+          let first = true
+          refreshTimer = setInterval(() => {
+            window.web3.eth.getBlockNumber((error, result) => {
+              if (handler.doneSyncing) {
+                if (first) {
+                  window.result.innerHTML = "Done!"
+                }
+                first = false
+                console.log("Syncing to: ", result)
+                handler.sync(result)
+              }
+            })
+          }, 1000)
+        })()
+        console.log("Done!")
       }
     }
 
