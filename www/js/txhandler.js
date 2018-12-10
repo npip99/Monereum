@@ -183,6 +183,7 @@ class TXHandler {
     this.initTx(tx.id)
     const txData = this.getTx(tx.id)
     if (txData.tx) {
+      console.log("TX REP")
       return
     }
     console.log("Transaciton Received: ", tx.id.toString(16), "(" + result.transactionHash + ")")
@@ -210,6 +211,7 @@ class TXHandler {
   handleRingGroupResult(result) {
     const ringGroup = parser.parseRingGroup(parser.initParser(result.data))
     if (this.getRingGroup(ringGroup.ringGroupHash)) {
+      console.log("RING GROUP REP")
       return
     }
     console.log("Ring Group Received: ", ringGroup.ringGroupHash.toString(16), "(" + result.transactionHash + ")")
@@ -248,6 +250,7 @@ class TXHandler {
     const ringGroupData = this.getRingGroup(ringGroupHash)
     for (const ringProof of ringGroupData.ringProofs) {
       if (ringProof.ringHash.eq(rp.ringHash)) {
+        console.log("RING PROOF REP")
         return
       }
     }
@@ -305,6 +308,7 @@ class TXHandler {
     );
     for (const otherRp of ringGroupData.rangeProofs) {
       if (otherRp.rangeProofHash.eq(rp.rangeProofHash)) {
+        console.log("RANGE PROOF REP")
         return
       }
     }
@@ -344,20 +348,22 @@ class TXHandler {
     if (ringGroupData.isRejected) {
       return
     }
-    console.log("Ring Group Rejected: ", ringGroupHash)
+    console.log("Ring Group Rejected: ", ringGroupHash.toString(16))
     ringGroupData.isRejected = true
     ringGroupData.isValid = false
-    for (const outputID of ringGroupData.outputIDs) {
+    for (const outputID of ringGroupData.ringGroup.outputIDs) {
       const txData = this.getTx(outputID)
       txData.isValid = false
     }
     for (const ringProof of ringGroupData.ringProofs) {
       const keyImageId = hash(ringProof.keyImage).toString(16)
-      if (!this.keyImages[keyImageId].ringGroupUses[ringGroupHash]) {
+      const keyImageData = this.keyImages[keyImageId]
+      const ringGroupUses = keyImageData.ringGroupUses
+      if (!ringGroupUses[ringGroupHash.toString(16)]) {
         console.error("Key Image was not accounted for")
       }
-      delete this.keyImages[keyImageId].ringGroupUses[ringGroupHash]
-      if (JSON.stringify(this.keyImages[keyImageId].ringGroupUses) === "{}") {
+      delete ringGroupUses[ringGroupHash.toString(16)]
+      if (JSON.stringify(ringGroupUses) === "{}") {
         if (keyImageData.txId) {
           const spentFundData = this.getTx(keyImageData.txId)
           spentFundData.spent = false

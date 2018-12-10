@@ -61,6 +61,7 @@ contract MonereumBlockchain is MonereumMemory {
 
     constructor(address MI, address MV) MonereumMath(MI) public {
         mv = MonereumVerifier(MV);
+        initializeH();
     }
 
     event LogRingGroupCommitted(uint256 ringGroupHash);
@@ -435,9 +436,28 @@ contract MonereumBlockchain is MonereumMemory {
     // Dispute Handling
     // ===
 
-    event LogFreedKeyImageHashes(
-        uint256[] keyImageHashes
+    event LogRingGroupRejected(
+        uint256 ringGroupHash
     );
+
+    function rejectRingGroup(
+        uint256 ringGroupHash,
+        uint256[] outputIDs,
+        uint256[] keyImageHashes
+    ) internal {
+        for (uint256 i = 0; i < keyImageHashes.length; i++) {
+            if (i > 0) {
+                require(keyImageHashes[i-1] < keyImageHashes[i]);
+            }
+            require(keyImageToRingGroup[keyImageHashes[i]] == ringGroupHash);
+            keyImageToRingGroup[keyImageHashes[i]] = 0;
+        }
+        emit LogRingGroupRejected(ringGroupHash);
+        for (i = 0; i < outputIDs.length; i++) {
+            statusData[outputIDs[i]] = Status.Rejected;
+        }
+        setRingGroupInfo(ringGroupHash, 0, 0, 0);
+    }
 
     function disputeLateRangeProof(
         uint256[] outputIDs,
@@ -451,19 +471,10 @@ contract MonereumBlockchain is MonereumMemory {
             rangeHashes
         )));
         (, uint256 rangeProofsRemaining, uint256 timer) = getRingGroupInfo(ringGroupHash);
-        if (rangeProofsRemaining != 0 && timer < block.timestamp) {
-            require(keyImageHashes.length == ringHashes.length);
-            for (uint256 i = 0; i < keyImageHashes.length; i++) {
-                if (i > 0) {
-                    require(keyImageHashes[i-1] < keyImageHashes[i]);
-                }
-                require(keyImageToRingGroup[keyImageHashes[i]] == ringGroupHash);
-                keyImageToRingGroup[keyImageHashes[i]] = 0;
-            }
-            emit LogFreedKeyImageHashes(keyImageHashes);
-            setRingGroupInfo(ringGroupHash, 0, 0, 0);
-            ethBalances[msg.sender] += badRingBountyAward;
-        }
+        require(rangeProofsRemaining != 0 && timer < block.timestamp);
+        require(keyImageHashes.length == ringHashes.length);
+        rejectRingGroup(ringGroupHash, outputIDs, keyImageHashes);
+        ethBalances[msg.sender] += badRingBountyAward;
     }
 
     // Disputes a rangeProofHash
@@ -554,6 +565,7 @@ contract MonereumBlockchain is MonereumMemory {
         uint256[] outputIDs,
         uint256[] ringHashes,
         uint256[] rangeHashes,
+        uint256[] keyImageHashes,
         uint256[2] commitment,
         uint256[2][] rangeCommitments,
         uint256[] rangeBorromeans,
@@ -575,8 +587,10 @@ contract MonereumBlockchain is MonereumMemory {
         address badRingBountyHolder = badDisputeTopicBountyHolders[ringGroupHash][rangeProofHash];
         require(badRingBountyHolder != 0, "rangeProof is not contested");
         ProofStatus disputedRingStatus = topicStatuses[ringGroupHash][rangeProofHash];
+        require(keyImageHashes.length == ringHashes.length);
         resolveDisputeClaim(
             outputIDs,
+            keyImageHashes,
             ringGroupHash,
             badRingBountyHolder,
             disputedRingStatus
@@ -684,6 +698,7 @@ contract MonereumBlockchain is MonereumMemory {
         uint256[] outputIDs,
         uint256[] ringHashes,
         uint256[] rangeHashes,
+        uint256[] keyImageHashes,
         uint256 ringHash
     ) public {
         uint256 ringGroupHash = uint256(keccak256(abi.encode(
@@ -696,8 +711,10 @@ contract MonereumBlockchain is MonereumMemory {
         // Checks if this is the disputed ring
         require(badRingBountyHolder != 0, "ring is not disputed");
         ProofStatus disputedRingStatus = topicStatuses[ringGroupHash][ringHash];
+        require(keyImageHashes.length == ringHashes.length);
         resolveDisputeClaim(
             outputIDs,
+            keyImageHashes,
             ringGroupHash,
             badRingBountyHolder,
             disputedRingStatus
@@ -794,6 +811,7 @@ contract MonereumBlockchain is MonereumMemory {
     // Resolve Dispute Claim Helper
     function resolveDisputeClaim(
         uint256[] outputIDs,
+        uint256[] keyImageHashes,
         uint256 ringGroupHash,
         address badRingBountyHolder,
         ProofStatus disputedProofStatus
@@ -807,10 +825,7 @@ contract MonereumBlockchain is MonereumMemory {
             setRingGroupInfo(ringGroupHash, 0, 0, block.timestamp + disputeTime);
             ethBalances[msg.sender] += goodRingBountyAward;
         } else if (disputedProofStatus == ProofStatus.Rejected) {
-            for(i = 0; i < outputIDs.length; i++) {
-               statusData[outputIDs[i]] = Status.Rejected;
-            }
-            setRingGroupInfo(ringGroupHash, 0, 0, 0);
+            rejectRingGroup(ringGroupHash, outputIDs, keyImageHashes);
             ethBalances[badRingBountyHolder] += badRingBountyAward;
         } else {
             require(false, "Proof status is still unknown");
