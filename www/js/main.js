@@ -46,7 +46,7 @@ window.addEventListener('load', async () => {
     const log = document.getElementById("log")
     let refreshTimer = null
 
-    changePerson = async e => {
+    changePerson = e => {
       e.preventDefault()
       const form = e.target
       const id = parseInt(form.elements.id.value)
@@ -56,14 +56,15 @@ window.addEventListener('load', async () => {
       if (id === 0) {
         document.getElementById("miner_form").style = "display: block;"
         document.getElementById("wallet_form").style = "display: none;"
-        window.m = new miner(new wallet("miner" + Math.random()), window.web3)
+        setTimeout(() => {
+          window.m = new miner(new wallet("miner" + Math.random()), window.web3)
+        }, 0)
       } else {
         document.getElementById("miner_form").style = "display: none;"
         document.getElementById("wallet_form").style = "display: block;"
         result.innerHTML = "Loading..."
         log.innerHTML = ""
-        ;(async () => {
-          console.log("Here: ", document.getElementById("wallet_form").style.display)
+        setTimeout(() => {
           window.person = new wallet("Person #" + id)
           window.handler = new txhandler(person, window.web3)
           handler.addReceiveHandler(tx => {
@@ -96,8 +97,7 @@ window.addEventListener('load', async () => {
               }
             })
           }, 1000)
-        })()
-        console.log("Done!")
+        }, 0)
       }
     }
 
