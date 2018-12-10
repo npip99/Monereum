@@ -81,7 +81,7 @@ class TXHandler {
     const ringGroupListener = createTopicFilter(constants.ringGroupTopic)
     const ringProofListener = createTopicFilter(constants.ringProofTopic)
     const rangeProofListener = createTopicFilter(constants.rangeProofTopic)
-    const freedKeyImageListener = createTopicFilter(constants.freedKeyImageTopic)
+    const ringGroupRejectedListener = createTopicFilter(constants.ringGroupRejectedTopic)
     const committedRingGroupListener = createTopicFilter(constants.committedRingGroupTopic)
 
     let transactionResults
@@ -89,7 +89,7 @@ class TXHandler {
     let ringGroupResults
     let ringProofResults
     let rangeProofResults
-    let freedKeyImageResults
+    let ringGroupRejectedResults
     let committedRingGroupResults
 
     transactionListener.get((error, result) => {
@@ -112,8 +112,8 @@ class TXHandler {
       rangeProofResults = result
     })
 
-    freedKeyImageListener.get((error, result) => {
-      freedKeyImageResults = result
+    ringGroupRejectedListener.get((error, result) => {
+      ringGroupRejectedResults = result
     })
 
     committedRingGroupListener.get((error, result) => {
@@ -121,7 +121,7 @@ class TXHandler {
     })
 
     this.interval = setInterval(() => {
-      if (!transactionResults || !mintTransactionResults || !ringGroupResults || !ringProofResults || !rangeProofResults || !freedKeyImageResults || !committedRingGroupResults) {
+      if (!transactionResults || !mintTransactionResults || !ringGroupResults || !ringProofResults || !rangeProofResults || !ringGroupRejectedResults || !committedRingGroupResults) {
         return
       }
       clearInterval(this.interval)
@@ -140,8 +140,8 @@ class TXHandler {
       for (const rangeProofResult of rangeProofResults) {
         this.handleRangeProofResult(rangeProofResult)
       }
-      for (const freedKeyImageResult of freedKeyImageResults) {
-        this.handleFreedKeyImageResult(freedKeyImageResult)
+      for (const ringGroupRejectedResult of ringGroupRejectedResults) {
+        this.handleRingGroupRejectedResult(ringGroupRejectedResult)
       }
       for (const committedRingGroupResult of committedRingGroupResults) {
         this.handleCommittedRingGroupResult(committedRingGroupResult)
@@ -190,7 +190,11 @@ class TXHandler {
     this.wallet.tryDecryptTransaction(tx)
     if (tx.receiverData) {
       console.log("Transaction Decrypted")
-      this.keyImages[hash(tx.dest.hashInP().times(tx.receiverData.privKey).affine()).toString(16)] = {txId: tx.id}
+      const keyImageId = hash(tx.dest.hashInP().times(tx.receiverData.privKey).affine()).toString(16)
+      this.keyImages[keyImageId] = {
+        txId: tx.id,
+        ringGroupUses: {},
+      }
     }
   }
 
@@ -247,36 +251,21 @@ class TXHandler {
         return
       }
     }
+
+    // Handle Key Image
     const keyImageId = hash(rp.keyImage).toString(16)
     if (!this.keyImages[keyImageId]) {
-      this.keyImages[keyImageId] = {}
-    }
-    const usedKeyImageData = this.keyImages[keyImageId]
-    let mostRecentKeyImageUsage = true
-    if (usedKeyImageData.confirmTime) {
-      if (
-        result.blockNumber > usedKeyImageData.confirmTime.blockNumber ||
-        (result.blockNumber === usedKeyImageData.confirmTime.blockNumber && result.transactionIndex > usedKeyImageData.confirmTime.transactionIndex)
-      ) {
-        mostRecentKeyImageUsage = true
-      } else {
-        mostRecentKeyImageUsage = false
+      this.keyImages[keyImageId] = {
+        ringGroupUses: {}
       }
     }
-    if (mostRecentKeyImageUsage) {
-      if (usedKeyImageData.txId) {
-        const spentFundData = this.getTx(usedKeyImageData.txId)
-        spentFundData.spent = true
-        if (this.spendHandler) {
-          this.spendHandler(spentFundData.tx)
-        }
-      }
-      usedKeyImageData.ringGroupHash = ringGroupHash
-      usedKeyImageData.confirmTime = {
-        blockNumber: result.blockNumber,
-        transactionIndex: result.transactionIndex,
-      }
+    const keyImageData = this.keyImages[keyImageId]
+    keyImageData.ringGroupUses[ringGroupHash.toString(16)] = true
+    if (keyImageData.txId) {
+      const spentFundData = this.getTx(keyImageData.txId)
+      spentFundData.spent = true
     }
+
     const funds = []
     for (const fund of rp.funds) {
       const id = hash(fund)
@@ -349,19 +338,29 @@ class TXHandler {
     }
   }
 
-  handleFreedKeyImageResult(result) {
-    const {freedKeyImages} = parser.parseFreedKeyImage(parser.initParser(result.data))
-    for (const freedKeyImage of freedKeyImages) {
-      const usedKeyImageData = this.keyImages[freedKeyImage.toString(16)]
-      if (
-        result.blockNumber > usedKeyImageData.confirmTime.blockNumber ||
-        (result.blockNumber == usedKeyImageData.confirmTime.blockNumber &&
-        result.transactionIndex > usedKeyImageData.confirmTime.transactionIndex)
-      ) {
-        usedKeyImageData.ringGroupHash = undefined
-        usedKeyImageData.confirmTime = undefined
-        if (usedKeyImageData.txId) {
-          this.getTx(usedKeyImageData.txId).spent = false
+  handleRingGroupRejectedResult(result) {
+    const {ringGroupHash} = parser.parseRingGroupRejected(parser.initParser(result.data))
+    const ringGroupData = this.getRingGroup(ringGroupHash)
+    if (ringGroupData.isRejected) {
+      return
+    }
+    console.log("Ring Group Rejected: ", ringGroupHash)
+    ringGroupData.isRejected = true
+    ringGroupData.isValid = false
+    for (const outputID of ringGroupData.outputIDs) {
+      const txData = this.getTx(outputID)
+      txData.isValid = false
+    }
+    for (const ringProof of ringGroupData.ringProofs) {
+      const keyImageId = hash(ringProof.keyImage).toString(16)
+      if (!this.keyImages[keyImageId].ringGroupUses[ringGroupHash]) {
+        console.error("Key Image was not accounted for")
+      }
+      delete this.keyImages[keyImageId].ringGroupUses[ringGroupHash]
+      if (JSON.stringify(this.keyImages[keyImageId].ringGroupUses) === "{}") {
+        if (keyImageData.txId) {
+          const spentFundData = this.getTx(keyImageData.txId)
+          spentFundData.spent = false
         }
       }
     }

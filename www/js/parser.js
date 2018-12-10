@@ -221,17 +221,10 @@ class Parser {
 		}
   }
 
-  static parseFreedKeyImage(parser) {
-    // Skip over dynamic argument locations
-    Parser.parseNum(parser)
-
-    const numFreedKeyImages = Parser.parseNum(parser)
-    const freedKeyImages = []
-    for (let i = 0; i < numFreedKeyImages; i++) {
-      freedKeyImages.push(Parser.parseNum(parser))
-    }
+  static parseRingGroupRejected(parser) {
+    const ringGroupHash = Parser.parseNum(parser)
     return {
-      freedKeyImages,
+      ringGroupHash,
     }
   }
 
