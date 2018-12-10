@@ -21,17 +21,13 @@ contract MonereumConstants {
     uint256 constant statusBitLocation = 255;
     uint256 constant statusBit = uint256(1) << statusBitLocation;
 
-    // When remaining > 0, 0-251 is rangeCommitmentCheck
-    // When remaining == 0, 0-251 is Timer
-    
     // ringGroup format data
-    //  255   252           0
-    // |remaining|check/timer|
+    //  255   252   212     0
+    // |remaining|timer|check|
     uint256 constant rangeCommitmentCheckBitLocation = 0;
-    uint256 constant rangeCommitmentCheckBitMask = (uint256(1) << 252) - 1;
+    uint256 constant rangeCommitmentCheckBitMask = (uint256(1) << 212) - 1;
+    uint256 constant timerBitLocation = 212;
+    uint256 constant timerBitMask = (uint256(1) << 40) - 1;
     uint256 constant rangeProofsRemainingBitLocation = 252;
     uint256 constant rangeProofsRemainingBitMask = (uint256(1) << 4) - 1;
-    // Overlap
-    uint256 constant timerBitLocation = rangeCommitmentCheckBitLocation;
-    uint256 constant timerBitMask = rangeCommitmentCheckBitMask;
 }

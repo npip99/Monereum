@@ -20,7 +20,7 @@ class TXHandler {
     // received tx IDs that are confirmed
     this.funds = []
 
-    // keyImage: string(Point)
+    // keyImage: string(bigInt)
     // =>
     // bool, whether or not the keyImage was used
     this.keyImages = {}
@@ -81,14 +81,16 @@ class TXHandler {
     const ringGroupListener = createTopicFilter(constants.ringGroupTopic)
     const ringProofListener = createTopicFilter(constants.ringProofTopic)
     const rangeProofListener = createTopicFilter(constants.rangeProofTopic)
+    const freedKeyImageListener = createTopicFilter(constants.freedKeyImageTopic)
     const committedRingGroupListener = createTopicFilter(constants.committedRingGroupTopic)
 
     let transactionResults
+    let mintTransactionResults
     let ringGroupResults
     let ringProofResults
     let rangeProofResults
+    let freedKeyImageResults
     let committedRingGroupResults
-    let mintTransactionResults
 
     transactionListener.get((error, result) => {
       transactionResults = result
@@ -110,12 +112,16 @@ class TXHandler {
       rangeProofResults = result
     })
 
+    freedKeyImageListener.get((error, result) => {
+      freedKeyImageResults = result
+    })
+
     committedRingGroupListener.get((error, result) => {
       committedRingGroupResults = result
     })
 
     this.interval = setInterval(() => {
-      if (!transactionResults || !mintTransactionResults || !ringGroupResults || !ringProofResults || !rangeProofResults || !committedRingGroupResults) {
+      if (!transactionResults || !mintTransactionResults || !ringGroupResults || !ringProofResults || !rangeProofResults || !freedKeyImageResults || !committedRingGroupResults) {
         return
       }
       clearInterval(this.interval)
@@ -133,6 +139,9 @@ class TXHandler {
       }
       for (const rangeProofResult of rangeProofResults) {
         this.handleRangeProofResult(rangeProofResult)
+      }
+      for (const freedKeyImageResult of freedKeyImageResults) {
+        this.handleFreedKeyImageResult(freedKeyImageResult)
       }
       for (const committedRingGroupResult of committedRingGroupResults) {
         this.handleCommittedRingGroupResult(committedRingGroupResult)
@@ -181,7 +190,7 @@ class TXHandler {
     this.wallet.tryDecryptTransaction(tx)
     if (tx.receiverData) {
       console.log("Transaction Decrypted")
-      this.keyImages[hash(tx.dest.hashInP().times(tx.receiverData.privKey).affine()).toString(16)] = tx.id
+      this.keyImages[hash(tx.dest.hashInP().times(tx.receiverData.privKey).affine()).toString(16)] = {txId: tx.id}
     }
   }
 
@@ -238,15 +247,34 @@ class TXHandler {
         return
       }
     }
-    const usedKeyImageID = this.keyImages[hash(rp.keyImage).toString(16)]
-    if (usedKeyImageID) {
-      const spentFundData = this.getTx(usedKeyImageID)
-      if (spentFundData.spent) {
-        console.error("Double spent!", result)
+    const keyImageId = hash(rp.keyImage).toString(16)
+    if (!this.keyImages[keyImageId]) {
+      this.keyImages[keyImageId] = {}
+    }
+    const usedKeyImageData = this.keyImages[keyImageId]
+    let mostRecentKeyImageUsage = true
+    if (usedKeyImageData.confirmTime) {
+      if (
+        result.blockNumber > usedKeyImageData.confirmTime.blockNumber ||
+        (result.blockNumber === usedKeyImageData.confirmTime.blockNumber && result.transactionIndex > usedKeyImageData.confirmTime.transactionIndex)
+      ) {
+        mostRecentKeyImageUsage = true
+      } else {
+        mostRecentKeyImageUsage = false
       }
-      spentFundData.spent = true
-      if (this.spendHandler) {
-        this.spendHandler(spentFundData.tx)
+    }
+    if (mostRecentKeyImageUsage) {
+      if (usedKeyImageData.txId) {
+        const spentFundData = this.getTx(usedKeyImageData.txId)
+        spentFundData.spent = true
+        if (this.spendHandler) {
+          this.spendHandler(spentFundData.tx)
+        }
+      }
+      usedKeyImageData.ringGroupHash = ringGroupHash
+      usedKeyImageData.confirmTime = {
+        blockNumber: result.blockNumber,
+        transactionIndex: result.transactionIndex,
       }
     }
     const funds = []
@@ -316,6 +344,24 @@ class TXHandler {
           }
           txData.isValid = true
           this.tryAddToFunds(txData.tx, ringGroupData.ringGroup.msgData)
+        }
+      }
+    }
+  }
+
+  handleFreedKeyImageResult(result) {
+    const {freedKeyImages} = parser.parseFreedKeyImage(parser.initParser(result.data))
+    for (const freedKeyImage of freedKeyImages) {
+      const usedKeyImageData = this.keyImages[freedKeyImage.toString(16)]
+      if (
+        result.blockNumber > usedKeyImageData.confirmTime.blockNumber ||
+        (result.blockNumber == usedKeyImageData.confirmTime.blockNumber &&
+        result.transactionIndex > usedKeyImageData.confirmTime.transactionIndex)
+      ) {
+        usedKeyImageData.ringGroupHash = undefined
+        usedKeyImageData.confirmTime = undefined
+        if (usedKeyImageData.txId) {
+          this.getTx(usedKeyImageData.txId).spent = false
         }
       }
     }
@@ -411,7 +457,7 @@ class TXHandler {
   }
 
   createMint(amount) {
-    return TXHandler.cleanTx(this.wallet.createTransaction(this.wallet.getMasterKey(), amount, "Minted", true))
+    return TXHandler.cleanTx(this.wallet.createTransaction(this.wallet.getMasterKey(), amount, strToHex("Minted"), true))
   }
 
   createFullTx(pubKey, amount, minerFee, msgHex) {

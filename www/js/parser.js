@@ -149,6 +149,7 @@ class Parser {
     Parser.parseNum(parser)
     Parser.parseNum(parser)
     Parser.parseNum(parser)
+    Parser.parseNum(parser)
 
     const numOutputs = Parser.parseNum(parser)
     const outputIDs = []
@@ -160,12 +161,18 @@ class Parser {
     for (let i = 0; i < numRings; i++) {
       ringHashes.push(Parser.parseNum(parser))
     }
+    const numRanges = Parser.parseNum(parser)
+    const rangeHashes = []
+    for (let i = 0; i < numRanges; i++) {
+      rangeHashes.push(Parser.parseNum(parser))
+    }
     const numBytes = Parser.parseNum(parser)
     const msgData = Parser.parseHex(parser, numBytes.toJSNumber())
     const rg = {
       ringGroupHash,
       outputIDs,
       ringHashes,
+      rangeHashes,
       msgData,
     }
     return rg
@@ -212,6 +219,20 @@ class Parser {
 			rangeProofs,
 			indices
 		}
+  }
+
+  static parseFreedKeyImage(parser) {
+    // Skip over dynamic argument locations
+    Parser.parseNum(parser)
+
+    const numFreedKeyImages = Parser.parseNum(parser)
+    const freedKeyImages = []
+    for (let i = 0; i < numFreedKeyImages; i++) {
+      freedKeyImages.push(Parser.parseNum(parser))
+    }
+    return {
+      freedKeyImages,
+    }
   }
 
   static initParser(data) {
