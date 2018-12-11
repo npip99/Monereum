@@ -1,6 +1,6 @@
 const wallet = require('./wallet')
 const bigInt = require('big-integer')
-const hash = require('./hash')
+const abi = require('./abi')
 const pt = require('./ecc-point')
 const txhandler = require('./txhandler')
 const miner = require('./miner')
@@ -10,8 +10,8 @@ const disputer = require('./disputer')
 const aes = require('aes-js')
 
 window.addEventListener('load', async () => {
-    // Modern dapp browsers...
     if (window.ethereum) {
+        // Modern dapp browsers...
         window.web3 = new Web3(ethereum);
         try {
             // Request account access if needed
@@ -22,16 +22,14 @@ window.addEventListener('load', async () => {
             return;
             // User denied account access...
         }
-    }
-    // Legacy dapp browsers...
-    else if (window.web3) {
-        window.web3 = new Web3(web3.currentProvider);
-        // Acccounts always exposed
-    }
-    // Non-dapp browsers...
-    else {
-        console.error('Non-Ethereum browser detected. You should consider trying MetaMask!');
-        return;
+    } else if (window.web3) {
+      // Legacy dapp browsers...
+      window.web3 = new Web3(web3.currentProvider);
+      // Acccounts always exposed
+    } else {
+      // Non-dapp browsers...
+      console.error('Non-Ethereum browser detected. You should consider trying MetaMask!');
+      return;
     }
 
     const strToHex = s => aes.utils.hex.fromBytes(aes.utils.utf8.toBytes(s))
@@ -41,7 +39,7 @@ window.addEventListener('load', async () => {
     window.aes = aes
     window.pt = pt
     window.bigInt = bigInt
-    window.hash = hash
+    window.abi = abi
     window.parser = parser
     window.disputer = disputer
     const result = document.getElementById("result")
@@ -58,10 +56,24 @@ window.addEventListener('load', async () => {
       if (id === 0) {
         document.getElementById("miner_form").style = "display: block;"
         document.getElementById("wallet_form").style = "display: none;"
-        window.person = new wallet("miner" + Math.random())
         setTimeout(() => {
+          window.person = new wallet("miner" + Math.random())
           window.m = new miner(person, window.web3)
           window.d = new disputer(person, window.web3)
+          window.web3.eth.getBlockNumber((error, result) => {
+            d.handler.sync(result)
+            //d.tryDispute()
+          })
+          refreshTimer = setInterval(() => {
+            window.web3.eth.getBlockNumber((error, result) => {
+              if (d.handler.doneSyncing) {
+                clearInterval(refreshTimer)
+                console.log("Syncing")
+                //d.handler.sync(result)
+                d.tryDispute()
+              }
+            })
+          }, 1000)
         }, 0)
       } else {
         document.getElementById("miner_form").style = "display: none;"
@@ -71,16 +83,18 @@ window.addEventListener('load', async () => {
         setTimeout(() => {
           window.person = new wallet("Person #" + id)
           window.handler = new txhandler(person, window.web3)
-          handler.addReceiveHandler(tx => {
+          handler.addReceiveListener(tx => {
             let msgDisplay = ""
             if (typeof tx.receiverData.msg === "string") {
               msgDisplay = " | " + hexToStr(tx.receiverData.msg)
             }
             log.innerHTML += "Received " + tx.receiverData.amount + msgDisplay + " (" + tx.id.toString(16) + ")" + "<br/>"
           })
-          handler.addSpendHandler(tx => {
+          /*
+          handler.addSpendListener(tx => {
             log.innerHTML += "Spent " + tx.receiverData.amount + " (" + tx.id.toString(16) + ")" + "<br/>"
           })
+          */
           const numKeys = parseInt(form.elements.numKeys.value) || 0
           for (let i = 0; i < numKeys; i++) {
             handler.getPublicKey()
@@ -96,7 +110,7 @@ window.addEventListener('load', async () => {
                   window.result.innerHTML = "Done!"
                 }
                 first = false
-                console.log("Syncing to: ", result)
+                console.log("Syncing")
                 handler.sync(result)
               }
             })

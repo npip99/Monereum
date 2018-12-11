@@ -1,5 +1,5 @@
 const wallet = require('./wallet')
-const hash = require('./hash')
+const {hash, format, funcHash} = require('./abi')
 const parser = require('./parser')
 const constants = require('./constants')
 const pt = require('./ecc-point')
@@ -35,9 +35,9 @@ class Miner {
         console.log("Ring Group Recognized: ", ringGroupHash.toString(16))
         const rangeProofs = ringGroupData.rangeProofs
         this.rangeProofsRemaining[ringGroupHash] = rangeProofs.length
-        const func = hash.funcHash("logRangeProof(uint256[],uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")
+        const func = funcHash("logRangeProof(uint256[],uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")
         rangeProofs.forEach(rp => {
-          const data = func.slice(0, 4*2) + hash.format(...rp)
+          const data = func.slice(0, 4*2) + format(...rp)
           this.web3.eth.sendTransaction({
             to: constants.blockchain,
             data: data,
@@ -69,8 +69,8 @@ class Miner {
         if((--this.rangeProofsRemaining[rangeProof.ringGroupHash]) == 0) {
           setTimeout(() => {
             const {outputIDs, ringHashes, rangeHashes} = this.pending[rangeProof.ringGroupHash]
-            const func = hash.funcHash("commitRingGroup(uint256[],uint256[],uint256[])")
-            const data = func.slice(0, 4*2) + hash.format(outputIDs, ringHashes, rangeHashes)
+            const func = funcHash("commitRingGroup(uint256[],uint256[],uint256[])")
+            const data = func.slice(0, 4*2) + format(outputIDs, ringHashes, rangeHashes)
             this.web3.eth.sendTransaction({
               to: constants.blockchain,
               data: data,
@@ -91,8 +91,8 @@ class Miner {
   }
 
   mint(tx) {
-    const func = hash.funcHash("mint(uint256[2],uint256[2],uint256)")
-    const data = func.slice(0, 4*2) + hash.format(tx.src, tx.dest, tx.commitmentAmount)
+    const func = funcHash("mint(uint256[2],uint256[2],uint256)")
+    const data = func.slice(0, 4*2) + format(tx.src, tx.dest, tx.commitmentAmount)
     this.web3.eth.sendTransaction({
         to: constants.blockchain,
         data: data,
@@ -114,22 +114,22 @@ class Miner {
     for (const ringProof of tx.ringProofs) {
       if (!this.wallet.verifyRingProof(ringProof)) {
         console.log("Invalid Ring Proof")
-        return null
+        //return null
       }
     }
     for (const rangeProof of tx.rangeProofs) {
       if (!this.wallet.verifyRangeProof(rangeProof)) {
         console.log("Invalid Range Proof")
-        return null
+        //return null
       }
     }
     const {ringGroupHash, ringHashes, rangeHashes, outputIDs, submit, rangeProofs, error} = this.formatSubmit(tx)
     if (error) {
       console.error(error)
-      return null
+      //return null
     }
-    const func = hash.funcHash("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],bytes,uint256[2])".replace(/MIXIN/g, constants.mixin))
-    const data = func.slice(0, 4*2) + hash.format(...submit)
+    const func = funcHash("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],bytes,uint256[2])".replace(/MIXIN/g, constants.mixin))
+    const data = func.slice(0, 4*2) + format(...submit)
     this.web3.eth.sendTransaction({
         to: constants.blockchain,
         data: data,
@@ -145,6 +145,8 @@ class Miner {
   }
 
   formatSubmit(tx) {
+    let error = null
+
     // Collect miner fee data
     const minerPub = this.wallet.getKey()
     const minerTx = this.wallet.createTransaction(minerPub, tx.minerFee, true)
@@ -168,9 +170,7 @@ class Miner {
     for (let i = 0; i < tx.ringProofs.length; i++) {
       const txRingProof = tx.ringProofs[i]
       if (txRingProof.outputHash.neq(outputHash)) {
-        return {
-          error: "Output hashes do not agree",
-        }
+        error = "Output hashes do not agree"
       }
       const ringProof = [txRingProof.funds.map(f => f.dest), txRingProof.keyImage, txRingProof.commitment, txRingProof.borromean, txRingProof.imageFundProofs, txRingProof.commitmentProofs, outputHash]
       ringProof[0].static = true
@@ -224,6 +224,7 @@ class Miner {
       outputIDs,
       rangeProofs,
       submit,
+      error,
     }
   }
 }

@@ -1,6 +1,6 @@
 const pt = require('./ecc-point')
 const bigInt = require('big-integer')
-const hash = require('./hash')
+const {hash, format} = require('./abi')
 const aes = require('aes-js')
 
 /*
@@ -45,7 +45,7 @@ class Wallet {
   }
 
   static encrypt(msg, key) {
-    const keyBytes = aes.utils.hex.toBytes(hash.padItem(key.toString(16)))
+    const keyBytes = aes.utils.hex.toBytes(format(key))
     const msgBytes = aes.utils.hex.toBytes(msg)
 
     const aesCtr = new aes.ModeOfOperation.ctr(keyBytes)
@@ -57,7 +57,7 @@ class Wallet {
   }
 
   static decrypt(encryptedHex, key) {
-    const keyBytes = aes.utils.hex.toBytes(hash.padItem(key.toString(16)))
+    const keyBytes = aes.utils.hex.toBytes(format(key))
     const encryptedBytes = aes.utils.hex.toBytes(encryptedHex)
 
     const aesCtr = new aes.ModeOfOperation.ctr(keyBytes)

@@ -1,4 +1,4 @@
-const hash = require('./hash')
+const {format, funcHash} = require('./abi')
 const txhandler = require('./txhandler')
 
 class Disputer {
@@ -8,21 +8,20 @@ class Disputer {
     this.handler = new txhandler(wallet, web3, true)
   }
 
-  sync(block) {
-    this.handler.sync(block)
-  }
-
   tryDispute() {
-    for (const ringGroupData in this.handler.ringGroups) {
-      if (!ringGroupData.isValid && !ringGroupData.isRejected) {
+    for (const ringGroupHash in this.handler.ringGroups) {
+      const ringGroupData = this.handler.ringGroups[ringGroupHash]
+      console.log(ringGroupData)
+      if (!ringGroupData.isValid && !ringGroupData.isRejected && !ringGroupData.confirmed) {
+      console.log(ringGroupData)
         for (const ringProof of ringGroupData.ringProofs) {
           if (!ringProof.isValid) {
-            disputeRingPRoof(ringGroupData, ringProof)
+            this.disputeRingProof(ringGroupData, ringProof)
           }
         }
         for (const rangeProof of ringGroupData.rangeProofs) {
           if (!rangeProof.isValid) {
-            disputeRangeProof(ringGroupData, rangeProof)
+            this.disputeRangeProof(ringGroupData, rangeProof)
           }
         }
       }
@@ -38,8 +37,16 @@ class Disputer {
     const outputIDs = ringGroupData.ringGroup.outputIDs
     const ringHashes = ringGroupData.ringGroup.ringHashes
     const rangeHashes = ringGroupData.ringGroup.rangeHashes
-    const func = hash.funcHash("disputeRangeProof(uint256[],uint256[],uint256[],uint256)")
-    const data = func.slice(0, 4*2) + hash.format(outputIDs, ringHashes, rangeHashes)
+    let rangeHash
+    for (const [i, rp] of ringGroupData.rangeProofs.entries()) {
+      if (rp == rangeProof) {
+        rangeHash = rangeHashes[i]
+        break
+      }
+    }
+    console.log(outputIDs, ringHashes, rangeHashes, rangeHash)
+    const func = funcHash("disputeRangeProof(uint256[],uint256[],uint256[],uint256)")
+    const data = func.slice(0, 4*2) + format(outputIDs, ringHashes, rangeHashes, rangeHash)
     this.web3.eth.sendTransaction({
         to: constants.blockchain,
         data: data,

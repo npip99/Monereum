@@ -1,4 +1,4 @@
-const hash = require("./hash");
+const {hash} = require("./abi");
 const bigInt = require('big-integer')
 
 class ECCPoint {

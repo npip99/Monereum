@@ -1,6 +1,6 @@
 const bigInt = require('big-integer')
 const wallet = require('./wallet')
-const hash = require('./hash')
+const {hash, format} = require('./abi')
 const pt = require('./ecc-point')
 const parser = require('./parser')
 const constants = require('./constants')
@@ -57,12 +57,8 @@ class TXHandler {
 
   }
 
-  addReceiveHandler(h) {
-    this.receiveHandler = h
-  }
-
-  addSpendHandler(h) {
-    this.spendHandler = h
+  addReceiveListener(h) {
+    this.receiveListener = h
   }
 
   sync(block) {
@@ -214,7 +210,7 @@ class TXHandler {
     const txData = this.getTx(txId)
     txData.confirmed = result.blockNumber
     txData.isValid = true
-    this.tryAddToFunds(txData.tx)
+    this.tryAddToFunds(txData.tx, "")
   }
 
   handleRingGroupResult(result) {
@@ -330,6 +326,7 @@ class TXHandler {
     console.log("Ring Group Rejected: ", ringGroupHash.toString(16))
     ringGroupData.isRejected = true
     ringGroupData.isValid = false
+    ringGroupData.pendingResult = undefined
     for (const outputID of ringGroupData.ringGroup.outputIDs) {
       const txData = this.getTx(outputID)
       txData.isValid = false
@@ -378,16 +375,14 @@ class TXHandler {
 
   tryAddToFunds(tx, msgData) {
     if (tx.receiverData) {
-      if (msgData) {
-        const msgHex = this.wallet.tryDecryptMsgData(msgData, tx)
-        if (typeof msgHex === "string") {
-          console.log("Msg Decrypted: ", msgHex)
-          tx.receiverData.msg = msgHex
-        }
+      const msgHex = this.wallet.tryDecryptMsgData(msgData, tx)
+      if (msgHex != null) {
+        console.log("Msg Decrypted: ", msgHex)
+        tx.receiverData.msg = msgHex
       }
       this.funds.push(tx.id)
-      if (this.receiveHandler) {
-        this.receiveHandler(tx)
+      if (this.receiveListener) {
+        this.receiveListener(tx)
       }
     }
   }
@@ -400,6 +395,7 @@ class TXHandler {
     }
   }
 
+  // Finds funds that sum to >= goalAmount
   collectAmount(goalAmount) {
     let amount = bigInt[0]
     const goalFunds = []
@@ -449,6 +445,8 @@ class TXHandler {
   createFullTx(pubKey, amount, minerFee, msgHex) {
     amount = bigInt(amount)
     minerFee = bigInt(minerFee)
+
+    // Get funds
     const collection = this.collectAmount(amount.plus(minerFee))
     if (!collection) {
       console.error("Not enough funds")
@@ -456,6 +454,8 @@ class TXHandler {
     }
     const funds = collection.funds
     const fundsAmount = collection.amount
+
+    // Create output transactions and randomize indices
     const tx = this.wallet.createTransaction(pubKey, amount, msgHex)
     const change = this.wallet.createTransaction(this.wallet.getMasterKey(), fundsAmount - amount - minerFee, strToHex("Spare Change"))
 
@@ -468,15 +468,16 @@ class TXHandler {
     for (const output of outs) {
       const indexSecret = hash(output.senderData.secret.minus(1))
       const msgLen = output.senderData.encryptedMsg.length / 2
-      msgLocations += hash.padItem(indexSecret.xor(bigInt(msgLen).shiftLeft(32).plus(msgPos))).slice(64 - 2*8)
+      msgLocations += format(indexSecret.xor(bigInt(msgLen).shiftLeft(32).plus(msgPos))).slice(64 - 2*8)
       msgPos += msgLen
       msgHeap += output.senderData.encryptedMsg
     }
     const msgData = msgLocations + msgHeap
 
-    const formatMsg = [msgData]
-    formatMsg.bytes = true
+    const formattedMsgData = [msgData]
+    formattedMsgData.bytes = true
 
+    // Format outputs
     const outputInfo = [
       outs.map(output => output.dest),
       outs.map(output => output.src),
@@ -484,7 +485,8 @@ class TXHandler {
       outs.map(output => output.commitmentAmount).concat([minerFee]),
     ]
 
-    const outputHash = hash(...outputInfo, formatMsg)
+    // Hash outputs and msgs to add to signature
+    const outputHash = hash(...outputInfo, formattedMsgData)
 
     let blindingSum = outs.reduce((a, b) => a.plus(b.senderData.blindingKey), bigInt[0])
     const ringProofs = []
@@ -492,6 +494,8 @@ class TXHandler {
       const mixers = this.getMixers(constants.mixin - 1)
       let blindingKey;
       if (i === funds.length - 1) {
+        // Sum of output blindingKeys, minus sum of the other funds
+        // This way, they balance: outputs - funds = 0
         blindingKey = blindingSum.mod(pt.q).plus(pt.q).mod(pt.q)
       } else {
         blindingKey = bigInt.randBetween(0, bigInt[2].pow(256)).mod(pt.q)
@@ -499,6 +503,7 @@ class TXHandler {
       }
       ringProofs.push(this.wallet.createRingProof(fund, mixers, outputHash, blindingKey))
     }
+
     const fullTX = {
       rangeProofs: outs.map(out => this.wallet.createRangeProof(out)),
       ringProofs,
