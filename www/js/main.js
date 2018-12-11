@@ -45,6 +45,7 @@ window.addEventListener('load', async () => {
     const result = document.getElementById("result")
     const log = document.getElementById("log")
     let refreshTimer = null
+    window.syncHandler = null
 
     changePerson = e => {
       e.preventDefault()
@@ -52,6 +53,9 @@ window.addEventListener('load', async () => {
       const id = parseInt(form.elements.id.value)
       if (refreshTimer) {
         clearInterval(refreshTimer)
+      }
+      if (syncHandler) {
+        syncHandler.stopped = true
       }
       if (id === 0) {
         document.getElementById("miner_form").style = "display: block;"
@@ -99,22 +103,27 @@ window.addEventListener('load', async () => {
           for (let i = 0; i < numKeys; i++) {
             handler.getPublicKey()
           }
-          window.web3.eth.getBlockNumber((error, result) => {
-            handler.sync(result)
-          })
           let first = true
-          refreshTimer = setInterval(() => {
+          const syncHandler = () => {
+            console.log("Syncing...")
             window.web3.eth.getBlockNumber((error, result) => {
-              if (handler.doneSyncing) {
+              if (result <= handler.position) {
+                setTimeout(syncHandler, 1000);
+                return
+              }
+              handler.sync(result, () => {
                 if (first) {
                   window.result.innerHTML = "Done!"
                 }
                 first = false
-                console.log("Syncing")
-                handler.sync(result)
-              }
+                if (!syncHandler.stopped) {
+                  syncHandler()
+                }
+              })
             })
-          }, 1000)
+          }
+          window.syncHandler = syncHandler
+          syncHandler()
         }, 0)
       }
     }

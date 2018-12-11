@@ -1,5 +1,5 @@
-var CryptoJS = require('crypto-js')
-var sha3 = require('crypto-js/sha3')
+const CryptoJS = require('crypto-js')
+const sha3 = require('crypto-js/sha3')
 const bigInt = require('big-integer')
 
 const leftPad = (s, goal, rep) => {

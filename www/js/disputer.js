@@ -8,6 +8,10 @@ class Disputer {
     this.handler = new txhandler(wallet, web3, true)
   }
 
+  sync() {
+    
+  }
+
   tryDispute() {
     for (const ringGroupHash in this.handler.ringGroups) {
       const ringGroupData = this.handler.ringGroups[ringGroupHash]
@@ -58,7 +62,6 @@ class Disputer {
         console.log("Range Proof Dispute Succeeded: ", hash)
       }
     })
-
   }
 }
 

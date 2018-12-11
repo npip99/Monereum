@@ -61,7 +61,7 @@ class TXHandler {
     this.receiveListener = h
   }
 
-  sync(block) {
+  sync(block, callback) {
     if (block <= this.position) {
       return
     }
@@ -156,6 +156,9 @@ class TXHandler {
         this.handleCommittedRingGroupResult(committedRingGroupResult)
       }
       this.doneSyncing = true
+      if (callback) {
+        setTimeout(callback, 0);
+      }
     }, 2000)
 
     this.position = block
