@@ -6,6 +6,7 @@ const txhandler = require('./txhandler')
 const miner = require('./miner')
 const constants = require('./constants')
 const parser = require('./parser')
+const disputer = require('./disputer')
 const aes = require('aes-js')
 
 window.addEventListener('load', async () => {
@@ -42,6 +43,7 @@ window.addEventListener('load', async () => {
     window.bigInt = bigInt
     window.hash = hash
     window.parser = parser
+    window.disputer = disputer
     const result = document.getElementById("result")
     const log = document.getElementById("log")
     let refreshTimer = null
@@ -56,8 +58,10 @@ window.addEventListener('load', async () => {
       if (id === 0) {
         document.getElementById("miner_form").style = "display: block;"
         document.getElementById("wallet_form").style = "display: none;"
+        window.person = new wallet("miner" + Math.random())
         setTimeout(() => {
-          window.m = new miner(new wallet("miner" + Math.random()), window.web3)
+          window.m = new miner(person, window.web3)
+          window.d = new disputer(person, window.web3)
         }, 0)
       } else {
         document.getElementById("miner_form").style = "display: none;"

@@ -123,7 +123,11 @@ class Miner {
         return null
       }
     }
-    const {ringGroupHash, ringHashes, rangeHashes, outputIDs, submit, rangeProofs} = this.formatSubmit(tx)
+    const {ringGroupHash, ringHashes, rangeHashes, outputIDs, submit, rangeProofs, error} = this.formatSubmit(tx)
+    if (error) {
+      console.error(error)
+      return null
+    }
     const func = hash.funcHash("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],bytes,uint256[2])".replace(/MIXIN/g, constants.mixin))
     const data = func.slice(0, 4*2) + hash.format(...submit)
     this.web3.eth.sendTransaction({
@@ -163,6 +167,11 @@ class Miner {
     const ringHashes = []
     for (let i = 0; i < tx.ringProofs.length; i++) {
       const txRingProof = tx.ringProofs[i]
+      if (txRingProof.outputHash.neq(outputHash)) {
+        return {
+          error: "Output hashes do not agree",
+        }
+      }
       const ringProof = [txRingProof.funds.map(f => f.dest), txRingProof.keyImage, txRingProof.commitment, txRingProof.borromean, txRingProof.imageFundProofs, txRingProof.commitmentProofs, outputHash]
       ringProof[0].static = true
       ringProof[4].static = true

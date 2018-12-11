@@ -4,8 +4,9 @@ import "./MonereumMath.sol";
 
 contract MonereumVerifier is MonereumMath {
     constructor(address MI) MonereumMath(MI) public {
+        initializeH();
     }
-    
+
     event Log(string r);
 
     event BadRangeProofReason(

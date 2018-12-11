@@ -351,7 +351,7 @@ contract MonereumBlockchain is MonereumMemory {
             v.commitmentSum = ecadd(v.commitmentSum, [outputCommitments[v.i][0], p - outputCommitments[v.i][1]]);
         }
         v.rangeProofCommitmentCheck &= rangeCommitmentCheckBitMask;
-        setRingGroupInfo(v.ringGroupHash, v.rangeProofCommitmentCheck, v.numOutputs, block.timestamp + 3 * disputeTime);
+        setRingGroupInfo(v.ringGroupHash, v.rangeProofCommitmentCheck, v.numOutputs, block.timestamp + disputeTime);
 
         if (v.minerFee == 0) {
             v.minerFeeCommitment = [uint256(0), uint256(0)];
@@ -529,6 +529,7 @@ contract MonereumBlockchain is MonereumMemory {
             rangeProofs,
             indices
         )));
+        require(topicStatuses[ringGroupHash][rangeProofHash] == ProofStatus.Unknown);
         require(badDisputeTopicBountyHolders[ringGroupHash][rangeProofHash] != 0, "Range Proof is not disputed");
         bool isValid = mv.verifyRangeProof(
             commitment,
@@ -666,6 +667,8 @@ contract MonereumBlockchain is MonereumMemory {
             commitmentProofs,
             outputHash
         )));
+        require(topicStatuses[ringGroupHash][v.ringHash] == ProofStatus.Unknown);
+        require(badDisputeTopicBountyHolders[ringGroupHash][v.ringHash] != 0, "Ring Proof is not disputed");
         for (uint256 i = 0; i < MIXIN; i++) {
             // Sqrt exists since transactions are validated
             v.commitmentX = transactions[hashP(funds[i])];
