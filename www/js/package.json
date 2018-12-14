@@ -5,8 +5,8 @@
   "main": "main.js",
   "scripts": {
     "serve": "cd ../ && serve && cd ./js",
-    "watch": "watchify main.js -d -o ./static/bundle.js -v [ babelify --presets [ @babel/preset-env ] ]",
-    "build": "mkdir -p static && browserify main.js -t [ babelify --presets [ @babel/preset-env ] ] | uglifyjs -mco ./static/bundle.js"
+    "watch": "mkdir -p build && watchify main.js -d -o ./build/bundle.js -v [ babelify --presets [ @babel/preset-env ] ]",
+    "compile": "mkdir -p build && browserify main.js -t [ babelify --presets [ @babel/preset-env ] ] | uglifyjs -mco ./build/bundle.js"
   },
   "dependencies": {
     "aes-js": "^3.1.2",
