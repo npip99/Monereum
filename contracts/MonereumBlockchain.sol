@@ -64,138 +64,46 @@ contract MonereumBlockchain is MonereumMemory {
         initializeH();
     }
 
-    event LogRingGroupCommitted(uint256 ringGroupHash);
-
-    function commitRingGroup(
-        uint256[] outputIDs,
-        uint256[] ringHashes,
-        uint256[] rangeHashes
-    ) public {
-        uint256 ringGroupHash = uint256(keccak256(abi.encode(
-            outputIDs,
-            ringHashes,
-            rangeHashes
-        )));
-        require(isValidRingGroup(ringGroupHash), "ringGroup is not valid");
-        (,, uint256 ringGroupTime) = getRingGroupInfo(ringGroupHash);
-        require(block.number >= ringGroupTime, "Not enough time has passed");
-        require(getStatus(outputIDs[0]) == Status.Pending, "Transaction is not pending");
-        for (uint256 i = 0; i < outputIDs.length; i++) {
-            // Set to accepting
-            transactions[outputIDs[i]] |= statusBit;
-        }
-        if (block.number >= ringGroupTime + disputeTime) {
-            ethBalances[msg.sender] += goodRingBountyAmount;
-        } else {
-            ethBalances[goodRingGroupBountyHolders[ringGroupHash]] += goodRingBountyAmount;
-        }
-        setRingGroupInfo(ringGroupHash, 0, 0, 0);
-
-        emit LogRingGroupCommitted(ringGroupHash);
-
-        // Claim gas
-        goodRingGroupBountyHolders[ringGroupHash] = 0;
-    }
-
-    // We check all lengths are the same and reasonable
-    // Verified: rangeProofCommitment[ringGroupHash][rangeProofHash] == Commitment
-    // rangeProofCommitment[ringGroupHash][rangeProofHash] = 0
-    // rangeProofsRemaining[ringGroupHash]--
-    // If rangeProofsRemaining == 0
-    //     ringGroupTimes[ringGroupHash] = block.number + disputeTime
-
-    function submitRangeProof(
-        // Used to get ringGroupHash and connect to outputIDs
-        uint256[] outputIDs,
-        uint256[] ringHashes,
-        uint256[] rangeHashes,
-        // Range Proof Hash
-        uint256[2] commitment,
-        uint256[2][] rangeCommitments,
-        uint256[] rangeBorromeans,
-        uint256[2][] rangeProofs,
-        uint256[] indices
-    ) public {
-        uint256 ringGroupHash = uint256(keccak256(abi.encode(
-            outputIDs,
-            ringHashes,
-            rangeHashes
-        )));
-        (uint256 rangeCommitmentCheck, uint256 rangeProofsRemaining, uint256 ringGroupTime) = getRingGroupInfo(ringGroupHash);
-        require(rangeProofsRemaining > 0, "Not enough range proofs remaining");
-        require(msg.sender == goodRingGroupBountyHolders[ringGroupHash], "Wrong submitter");
-        uint256 bits = indices.length;
-        require(rangeCommitments.length == bits);
-        require(rangeBorromeans.length == bits);
-        require(rangeProofs.length == bits);
-        require(1 <= bits && bits <= 16);
-        uint256 rangeProofHash = uint256(keccak256(abi.encode(
-            commitment,
-            rangeCommitments,
-            rangeBorromeans,
-            rangeProofs,
-            indices
-        )));
-        require(isInSet(rangeProofHash, rangeHashes), "Range Hash does not match Ring Group");
-        emit LogRangeProof(
-            ringGroupHash,
-            commitment,
-            rangeCommitments,
-            rangeBorromeans,
-            rangeProofs,
-            indices
-        );
-        rangeCommitmentCheck = (rangeCommitmentCheck ^ hashP(commitment)) & rangeCommitmentCheckBitMask;
-        rangeProofsRemaining--;
-        if (rangeProofsRemaining == 0) {
-            if (rangeCommitmentCheck == 0) {
-                setRingGroupInfo(ringGroupHash, 0, 0, block.number + disputeTime);
-            } else {
-                require(false, "Ring Commitments did not match");
-            }
-        } else {
-            setRingGroupInfo(ringGroupHash, rangeCommitmentCheck, rangeProofsRemaining, ringGroupTime);
-        }
-    }
-
-    event LogRangeProof(
-        uint256 ringGroupHash,
-        uint256[2] commitment,
-        uint256[2][] rangeCommitments,
-        uint256[] rangeBorromeans,
-        uint256[2][] rangeProofs,
-        uint256[] indices
-    );
-
-    struct Variables {
-        uint256[2] keyImage;
-        uint256[2] commitmentSum;
-        uint256[2] minerFeeCommitment;
-        uint256 numOutputs;
-        uint256 numRangeProofs;
-        uint256 outputHash;
-        uint256 ringHash;
-        uint256 transactionID;
-        uint256 R;
-        uint256 i;
-        uint256 j;
-        uint256 minerFee;
-        uint256 commitmentHash;
-        uint256 ring;
-        uint256 bounty;
-        uint256 ringGroupHash;
-        uint256 outputID;
-        address sender;
-        uint256 rangeProofCommitmentCheck;
-        uint256[] ringHashes;
-        uint256[] outputIDs;
-        uint256 keyImageHash;
-    }
-
+    // Save miner fee so it doesn't have to be computed each time
     function saveMinerFee(uint256 fee) public {
         require(fee < (uint256(1) << 64));
         require(fee != 0);
         minerFeeH[fee] = ecmul(h, fee);
+    }
+
+    event LogTransaction(
+        uint256 outputID,
+        uint256[2] src,
+        uint256[2] dest,
+        uint256[2] commitment,
+        uint256 commitmentAmount
+    );
+
+    event LogMintTransaction(
+        uint256 transactionID
+    );
+
+    // Mint Monereum
+    function mint(
+        uint256[2] src,
+        uint256[2] dest,
+        uint256 amount
+    ) public {
+        require(eccvalid(dest)); // "Dest is not on curve"
+        require(isInf(src) || eccvalid(src)); // "Src is not on curve"
+        uint256 transactionID = hashP(dest);
+        require(getStatus(transactionID) == Status.NonExistant); // "Transaction already exists"
+        uint256[2] memory commitment = ecmul(h, amount);
+        transactions[transactionID] = hashP(commitment) | statusBit;
+
+        emit LogTransaction(
+            transactionID,
+            src,
+            dest,
+            commitment,
+            amount
+        );
+        emit LogMintTransaction(transactionID);
     }
 
     // Maps N input rings, to M output transactions
@@ -222,171 +130,6 @@ contract MonereumBlockchain is MonereumMemory {
     // rangeProofsRemaining[ringGroupHash] = M
     // ethBalances[msg.sender] -= goodRingBountyAmount (Overflow checked)
 
-    uint256 frozenTime = uint256(1) << 255;
-
-    function submit(
-        // N Input Rings
-        uint256[2][MIXIN][] funds,
-        // N Ring Proofs
-        uint256[2][] keyImage,
-        uint256[2][] commitment,
-        uint256[] borromean,
-        uint256[MIXIN][] imageFundProofs,
-        uint256[MIXIN][] commitmentProofs,
-        // M Range Proofs
-        uint256[] rangeProofHashes,
-        // M Outputs
-        uint256[2][] outputDests,
-        uint256[2][] outputSrcs,
-        uint256[2][] outputCommitments,
-        uint256[] outputAmounts,
-        bytes outputMsgs,
-        // Miner
-        uint256[2] minerDest
-    ) public {
-        // Can't declare variables as memory, so group them into a struct
-        // (We're already at stack limits for this function)
-        Variables memory v;
-
-        v.R = funds.length;
-        require(v.R > 0 && v.R < 5); // "Only 1...4 rings are allowed"
-        require(keyImage.length == v.R);
-        require(commitment.length == v.R);
-        require(borromean.length == v.R);
-        require(imageFundProofs.length == v.R);
-        require(commitmentProofs.length == v.R);
-
-        v.numOutputs = outputDests.length;
-        require(v.numOutputs > 0 && v.numOutputs < 5); // "Only 1...4 outputs are allowed"
-        require(outputSrcs.length == v.numOutputs);
-        require(outputCommitments.length == v.numOutputs);
-        require(outputAmounts.length == v.numOutputs + 1);
-        v.minerFee = outputAmounts[v.numOutputs];
-
-        v.outputHash = uint256(keccak256(
-            // encodePacked loses length information so we must use .encode everywhere
-            // otherwise outputsDests[-1] could be shifted into outputSrcs[0] with same hash
-            abi.encode(outputDests, outputSrcs, outputCommitments, outputAmounts, outputMsgs)
-        ));
-
-        v.ringHashes = new uint256[](v.R);
-
-        v.commitmentSum = [uint256(0), uint256(0)];
-        for (v.ring = 0; v.ring < v.R; v.ring++) {
-            for ( v.i = 0; v.i < MIXIN; v.i++ ) {
-                v.transactionID = hashP(funds[v.ring][v.i]);
-                require(getStatus(v.transactionID) == Status.Accepted); // "Transaction has not been accepted yet"
-            }
-            v.ringHash = uint256(keccak256(abi.encode(
-                funds[v.ring],
-                keyImage[v.ring],
-                commitment[v.ring],
-                borromean[v.ring],
-                imageFundProofs[v.ring],
-                commitmentProofs[v.ring],
-                v.outputHash
-            )));
-            emit LogRingProof(
-                v.ringHash,
-                funds[v.ring],
-                keyImage[v.ring],
-                commitment[v.ring],
-                borromean[v.ring],
-                imageFundProofs[v.ring],
-                commitmentProofs[v.ring],
-                v.outputHash
-            );
-            require(eccvalid(commitment[v.ring])); // "Input commitments must be on curve"
-            v.commitmentSum = ecadd(v.commitmentSum, commitment[v.ring]);
-            v.ringHashes[v.ring] = v.ringHash;
-        }
-
-        v.outputIDs = new uint256[](v.numOutputs + 1);
-        for (v.i = 0; v.i < v.numOutputs; v.i++) {
-            require(eccvalid(outputDests[v.i])); // "Not all output dests are on curve"
-            v.outputIDs[v.i] = hashP(outputDests[v.i]);
-        }
-        require(eccvalid(minerDest)); // "Miner destination is not on curve"
-        v.outputIDs[v.numOutputs] = hashP(minerDest);
-
-        v.ringGroupHash = uint256(keccak256(abi.encode(
-            v.outputIDs,
-            v.ringHashes,
-            rangeProofHashes
-        )));
-        emit LogRingGroup(
-            v.ringGroupHash,
-            v.outputIDs,
-            v.ringHashes,
-            rangeProofHashes,
-            outputMsgs
-        );
-
-        for ( v.ring = 0; v.ring < v.R; v.ring++ ) {
-          v.keyImage = keyImage[v.ring];
-          v.keyImageHash = hashP(v.keyImage);
-          require(keyImageToRingGroup[v.keyImageHash] == 0); // "keyImage is already used"
-          keyImageToRingGroup[v.keyImageHash] = v.ringGroupHash;
-        }
-
-        v.rangeProofCommitmentCheck = 0;
-        for( v.i = 0; v.i < v.numOutputs; v.i++ ) {
-            v.outputID = v.outputIDs[v.i];
-            require(getStatus(v.outputID) == Status.NonExistant); // "Output transaction already exists"
-            transactions[v.outputID] = compress(outputCommitments[v.i]);
-            emit LogTransaction(
-                v.outputID,
-                outputSrcs[v.i],
-                outputDests[v.i],
-                outputCommitments[v.i],
-                outputAmounts[v.i]
-            );
-            require(outputAmounts[v.i] < q); // "commitmentAmount is not in Q"
-            v.commitmentHash = hashP(outputCommitments[v.i]);
-            for ( v.j = 0; v.j < v.i; v.j++) {
-                require(v.commitmentHash != hashP(outputCommitments[v.j])); // "Each output commitment must be unique"
-            }
-            v.rangeProofCommitmentCheck ^= v.commitmentHash;
-            require(eccvalid(outputCommitments[v.i])); // "Commitment sum failed; not all output commitments are on curve"
-            v.commitmentSum = ecadd(v.commitmentSum, [outputCommitments[v.i][0], p - outputCommitments[v.i][1]]);
-        }
-        v.rangeProofCommitmentCheck &= rangeCommitmentCheckBitMask;
-        setRingGroupInfo(v.ringGroupHash, v.rangeProofCommitmentCheck, v.numOutputs, block.number + disputeTime);
-
-        if (v.minerFee == 0) {
-            v.minerFeeCommitment = [uint256(0), uint256(0)];
-        } else {
-            v.minerFeeCommitment = minerFeeH[v.minerFee];
-            require(v.minerFeeCommitment[0] != 0); // "Miner Fee has not been calculated yet"
-        }
-        require(v.commitmentSum[0] == v.minerFeeCommitment[0]); // "Commitment sum failed; Does not sum to zero"
-        require(v.commitmentSum[1] == v.minerFeeCommitment[1]); // "Commitment sum failed; Does not sum to zero"
-
-        v.outputID = v.outputIDs[v.numOutputs];
-        require(getStatus(v.outputID) == Status.NonExistant); // "Miner transaction already exists"
-        transactions[v.outputID] = compress(v.minerFeeCommitment);
-        emit LogTransaction(
-            v.outputID,
-            [uint256(0), uint256(0)],
-            minerDest,
-            v.minerFeeCommitment,
-            v.minerFee
-        );
-
-        v.sender = msg.sender;
-        require(ethBalances[v.sender] >= goodRingBountyAmount); // "Not enough funds for bounty"
-        ethBalances[v.sender] -= goodRingBountyAmount;
-        goodRingGroupBountyHolders[v.ringGroupHash] = v.sender;
-    }
-
-    event LogTransaction(
-        uint256 outputID,
-        uint256[2] src,
-        uint256[2] dest,
-        uint256[2] commitment,
-        uint256 commitmentAmount
-    );
-
     event LogRingGroup(
         uint256 ringGroupHash,
         uint256[] outputIDs,
@@ -406,58 +149,373 @@ contract MonereumBlockchain is MonereumMemory {
         uint256 outputHash
     );
 
-    // Mint Monereum
-    function mint(
-        uint256[2] src,
-        uint256[2] dest,
-        uint256 amount
+    // Submits a new ring group
+    // =====================
+    // Requires 1 <= N, M <= 4
+    // Requires Funds/keyImage/Commitments to be ECC Points
+    // Requires imageFundProofs/commitmentProofs to be in Q
+    // Requires outputDests to be ECC Points
+    // Requires outputSrcs to be ECC Points
+    // Requires amounts to be in Q
+    // Requires minerDest to be an ECC Point
+    // Requires all Funds to be accepted
+    // Requires Sum(inputCommitments) = Sum(outputCommitments) + minerFee*H
+    // Requires keyImage to have not been used before
+    // Requires outputDests and minerDest to have not been used before
+    // Requires submitter to have enough ETH for bounty on good ring
+    // ------------------------------------------------
+    // Logs each ring proof
+    // Calculates ringGroupHash
+    // Logs ring group
+    // Sets the ring group's commitment check to XOR(HashP(outputCommitment_i))
+    // Sets the ring group's range proof remaining to M
+    // Sets the ring group's late range proof timer to now + disputeTime
+    // Sets each transaction to hash(commitment)
+    // Sets each transaction status to pending
+    // Logs each transaction
+    // Takes bounty on good ring
+    // Sets bounty holder to msg.sender
+    // ================================
+    function submitRingGroup(
+        // N Input Rings
+        uint256[2][MIXIN][] funds,
+        // N Ring Proofs
+        uint256[2][] keyImage,
+        uint256[2][] commitment,
+        uint256[] borromean,
+        uint256[MIXIN][] imageFundProofs,
+        uint256[MIXIN][] commitmentProofs,
+        // M Range Proofs
+        uint256[] rangeHashes,
+        // M Outputs
+        uint256[2][] outputDests,
+        uint256[2][] outputSrcs,
+        uint256[2][] outputCommitments,
+        uint256[] outputAmounts, // Size M + 1, including minerFee
+        bytes outputMsgs,
+        // Miner
+        uint256[2] minerDest
     ) public {
-        require(eccvalid(dest)); // "Dest is not on curve"
-        require(isInf(src) || eccvalid(src)); // "Src is not on curve"
-        uint256 transactionID = hashP(dest);
-        require(getStatus(transactionID) == Status.NonExistant); // "Transaction already exists"
-        uint256[2] memory commitment = ecmul(h, amount);
-        transactions[transactionID] = compress(commitment) | statusBit;
-        emit LogTransaction(
-            transactionID,
-            src,
-            dest,
-            commitment,
-            amount
+        SubmitVariables memory v;
+
+        // Validate number of rings
+        v.R = funds.length;
+        require(v.R > 0 && v.R < 5); // "Only 1...4 rings are allowed"
+        require(keyImage.length == v.R);
+        require(commitment.length == v.R);
+        require(borromean.length == v.R);
+        require(imageFundProofs.length == v.R);
+        require(commitmentProofs.length == v.R);
+
+        // Validate number of range proofs
+        v.numOutputs = rangeHashes.length;
+        require(v.numOutputs > 0 && v.numOutputs < 5); // "Only 1...4 outputs are allowed"
+        require(outputDests.length == v.numOutputs);
+        require(outputSrcs.length == v.numOutputs);
+        require(outputCommitments.length == v.numOutputs);
+        require(outputAmounts.length == v.numOutputs + 1);
+
+        // Miner fee is last output
+        v.minerFee = outputAmounts[v.numOutputs];
+
+        // Get outputHash (It's required that the proofs sign all of this data)
+        v.outputHash = uint256(keccak256(
+            // encodePacked loses length information so we must use .encode everywhere
+            // otherwise outputsDests[-1] could be shifted into outputSrcs[0] with same hash
+            abi.encode(outputDests, outputSrcs, outputCommitments, outputAmounts, outputMsgs)
+        ));
+
+        // Checking Inputs = Outputs + MinerFee
+        v.commitmentSum = [uint256(0), uint256(0)];
+
+        v.ringHashes = new uint256[](v.R);
+
+        for (v.ring = 0; v.ring < v.R; v.ring++) {
+            // Check that all inputs have been accepted
+            for ( v.i = 0; v.i < MIXIN; v.i++ ) {
+                v.transactionID = hashP(funds[v.ring][v.i]);
+                require(getStatus(v.transactionID) == Status.Accepted); // "Transaction has not been accepted yet"
+            }
+
+            // Check that proofs are in Q
+            for ( v.i = 0; v.i < MIXIN; v.i++ ) {
+                require(imageFundProofs[v.ring][v.i] < q && commitmentProofs[v.ring][v.i] < q);
+            }
+
+            // Check and save commitmentSum for this input
+            require(eccvalid(commitment[v.ring])); // "Input commitments must be on curve"
+            v.commitmentSum = ecadd(v.commitmentSum, commitment[v.ring]);
+
+            // Calculate ringHash
+            v.ringHashes[v.ring] = uint256(keccak256(abi.encode(
+                funds[v.ring],
+                keyImage[v.ring],
+                commitment[v.ring],
+                borromean[v.ring],
+                imageFundProofs[v.ring],
+                commitmentProofs[v.ring],
+                v.outputHash
+            )));
+
+            // Log ring proof
+            emit LogRingProof(
+                v.ringHashes[v.ring],
+                funds[v.ring],
+                keyImage[v.ring],
+                commitment[v.ring],
+                borromean[v.ring],
+                imageFundProofs[v.ring],
+                commitmentProofs[v.ring],
+                v.outputHash
+            );
+        }
+
+        // Create and validate outputID list
+        v.outputIDs = new uint256[](v.numOutputs + 1);
+        for (v.i = 0; v.i < v.numOutputs; v.i++) {
+            require(eccvalid(outputDests[v.i])); // "Not all output dests are on curve"
+            v.outputIDs[v.i] = hashP(outputDests[v.i]);
+            require(getStatus(v.outputIDs[v.i]) == Status.NonExistant); // "Output transaction already exists"
+        }
+        require(eccvalid(minerDest)); // "Miner destination is not on curve"
+        v.outputIDs[v.numOutputs] = hashP(minerDest);
+        require(getStatus(v.outputIDs[v.numOutputs]) == Status.NonExistant); // "Output transaction already exists"
+
+
+        // Calculate ringGroupHash
+        v.ringGroupHash = uint256(keccak256(abi.encode(
+            v.outputIDs,
+            v.ringHashes,
+            rangeHashes
+        )));
+
+        // Log ring group
+        emit LogRingGroup(
+            v.ringGroupHash,
+            v.outputIDs,
+            v.ringHashes,
+            rangeHashes,
+            outputMsgs
         );
-        emit LogMintTransaction(transactionID);
+
+        // Validate key images as unused, and save associated ring group
+        for ( v.ring = 0; v.ring < v.R; v.ring++ ) {
+          v.keyImage = keyImage[v.ring];
+          require(eccvalid(v.keyImage));
+          v.keyImageHash = hashP(v.keyImage);
+          require(keyImageToRingGroup[v.keyImageHash] == 0); // "keyImage is already used"
+          keyImageToRingGroup[v.keyImageHash] = v.ringGroupHash;
+        }
+
+        // commitmentCheck is the cummulative xor of each output commitment
+        v.rangeProofCommitmentCheck = 0;
+        for( v.i = 0; v.i < v.numOutputs; v.i++ ) {
+            // Get outputID
+            v.outputID = v.outputIDs[v.i];
+
+            // Validate transaction information
+            require(eccvalid(outputSrcs[v.i]));
+            // outputDest already validated
+            require(outputAmounts[v.i] < q); // "commitmentAmount is not in Q"
+            require(eccvalid(outputCommitments[v.i])); // "Commitment sum failed; not all output commitments are on curve"
+
+            v.commitmentHash = hashP(outputCommitments[v.i]);
+            // Require unique outputCommitments
+            for ( v.j = 0; v.j < v.i; v.j++) {
+                require(v.commitmentHash != hashP(outputCommitments[v.j])); // "Each output commitment must be unique"
+            }
+            // Update commitmentCheck
+            v.rangeProofCommitmentCheck ^= v.commitmentHash;
+
+            // Subtract outputs from inputs
+            v.commitmentSum = ecadd(v.commitmentSum, [outputCommitments[v.i][0], p - outputCommitments[v.i][1]]);
+
+            // Save and Log output transaction
+            transactions[v.outputID] = hashP(outputCommitments[v.i]) & ~statusBit;
+            emit LogTransaction(
+                v.outputID,
+                outputSrcs[v.i],
+                outputDests[v.i],
+                outputCommitments[v.i],
+                outputAmounts[v.i]
+            );
+        }
+
+        // Save commitmentCheck, number of needed range proofs, and late range proof timer
+        v.rangeProofCommitmentCheck &= rangeCommitmentCheckBitMask;
+        setRingGroupInfo(v.ringGroupHash, v.rangeProofCommitmentCheck, v.numOutputs, block.number + disputeTime);
+
+        // Get minerFeeCommitment (Validates minerFee)
+        if (v.minerFee == 0) {
+            v.minerFeeCommitment = [uint256(0), uint256(0)];
+        } else {
+            v.minerFeeCommitment = minerFeeH[v.minerFee];
+            if (v.minerFeeCommitment[0] == 0) {
+                saveMinerFee(v.minerFee);
+                v.minerFeeCommitment = minerFeeH[v.minerFee];
+            }
+        }
+
+        // Checking: Inputs - Outputs = MinerFee (Inputs = Outputs + MinerFee)
+        require(v.commitmentSum[0] == v.minerFeeCommitment[0]); // "Commitment sum failed; Does not sum to zero"
+        require(v.commitmentSum[1] == v.minerFeeCommitment[1]); // "Commitment sum failed; Does not sum to zero"
+
+        // Get minerFee outputID
+        v.outputID = v.outputIDs[v.numOutputs];
+
+        // Save and log minerFee transaction
+        transactions[v.outputID] = hashP(v.minerFeeCommitment) & ~statusBit;
+        emit LogTransaction(
+            v.outputID,
+            [uint256(0), uint256(0)],
+            minerDest,
+            v.minerFeeCommitment,
+            v.minerFee
+        );
+
+        // Collect bounty on good ring
+        v.sender = msg.sender;
+        require(ethBalances[v.sender] >= goodRingBountyAmount); // "Not enough funds for bounty"
+        ethBalances[v.sender] -= goodRingBountyAmount;
+
+        // Set as good ring bounty holder
+        goodRingGroupBountyHolders[v.ringGroupHash] = v.sender;
     }
 
-    event LogMintTransaction(
-        uint256 transactionID
+    event LogRangeProof(
+        uint256 ringGroupHash,
+        uint256[2] commitment,
+        uint256[2][] rangeCommitments,
+        uint256[] rangeBorromeans,
+        uint256[2][] rangeProofs,
+        uint256[] indices
     );
+
+    // We check all lengths are the same and reasonable
+    // Verified: rangeProofCommitment[ringGroupHash][rangeProofHash] == Commitment
+    // rangeProofCommitment[ringGroupHash][rangeProofHash] = 0
+    // rangeProofsRemaining[ringGroupHash]--
+    // If rangeProofsRemaining == 0
+    //     ringGroupTimes[ringGroupHash] = block.number + disputeTime
+
+    function submitRangeProof(
+        // Used to get ringGroupHash and connect to outputIDs
+        uint256[] outputIDs,
+        uint256[] ringHashes,
+        uint256[] rangeHashes,
+        // Range Proof Hash
+        uint256[2] commitment,
+        uint256[2][] rangeCommitments,
+        uint256[] rangeBorromeans,
+        uint256[2][] rangeProofs,
+        uint256[] indices
+    ) public {
+        // Associate rangeHashes with ringGroupHash
+        uint256 ringGroupHash = uint256(keccak256(abi.encode(
+            outputIDs,
+            ringHashes,
+            rangeHashes
+        )));
+
+        // Validate ringGroupHash and submitter
+        (uint256 rangeCommitmentCheck, uint256 rangeProofsRemaining, uint256 ringGroupTime) = getRingGroupInfo(ringGroupHash);
+        require(rangeProofsRemaining > 0, "Not enough range proofs remaining");
+        require(msg.sender == goodRingGroupBountyHolders[ringGroupHash], "Wrong submitter");
+
+        // Validate rangeProofHash
+        uint256 rangeProofHash = uint256(keccak256(abi.encode(
+            commitment,
+            rangeCommitments,
+            rangeBorromeans,
+            rangeProofs,
+            indices
+        )));
+        require(isInSet(rangeProofHash, rangeHashes), "Range Hash does not match Ring Group");
+
+        // Validate bitlength
+        uint256 bits = indices.length;
+        require(1 <= bits && bits <= 16);
+        require(rangeCommitments.length == bits);
+
+        // Calculate next iteration's parameters
+        rangeCommitmentCheck = (rangeCommitmentCheck ^ hashP(commitment)) & rangeCommitmentCheckBitMask;
+        rangeProofsRemaining--;
+
+        if (rangeProofsRemaining == 0) {
+            if (rangeCommitmentCheck == 0) {
+                // Begin accepting disputes
+                setRingGroupInfo(ringGroupHash, 0, 0, block.number + disputeTime);
+            } else {
+                // xors of hashP(commitment_i) must match the original submission
+                require(false, "Ring Commitments did not match");
+            }
+        } else {
+            // Prepare next iteration
+            setRingGroupInfo(ringGroupHash, rangeCommitmentCheck, rangeProofsRemaining, ringGroupTime);
+        }
+
+        // Log range proof
+        emit LogRangeProof(
+            ringGroupHash,
+            commitment,
+            rangeCommitments,
+            rangeBorromeans,
+            rangeProofs,
+            indices
+        );
+    }
+
+    event LogRingGroupCommitted(uint256 ringGroupHash);
+
+    // Commits Ring Group
+    // ==================
+    // Requires a link between outputIDs and ringGroupHash
+    // Requires latePendingTime + disputeTime <= commitTime
+    // ----------------------------------------------------
+    // Sets all outputIDs to accepted
+    // Wipes ringGroup info
+    // Awards bounty to submitter (Or anyone, if the commitment is too delayed)
+    // ====================
+    function commitRingGroup(
+        uint256[] outputIDs,
+        uint256[] ringHashes,
+        uint256[] rangeHashes
+    ) public {
+        uint256 ringGroupHash = uint256(keccak256(abi.encode(
+            outputIDs,
+            ringHashes,
+            rangeHashes
+        )));
+        require(isValidRingGroup(ringGroupHash), "ringGroup is not valid");
+        (,, uint256 ringGroupTime) = getRingGroupInfo(ringGroupHash);
+        require(block.number >= ringGroupTime, "Not enough time has passed");
+
+        require(getStatus(outputIDs[0]) == Status.Pending, "Transaction is not pending");
+        for (uint256 i = 0; i < outputIDs.length; i++) {
+            transactions[outputIDs[i]] |= statusBit;
+        }
+
+        if (block.number >= ringGroupTime + disputeTime) {
+            // Award bounty to anyone when commitment is late
+            ethBalances[msg.sender] += goodRingBountyAmount;
+        } else {
+            // Award bounty to submitter
+            ethBalances[goodRingGroupBountyHolders[ringGroupHash]] += goodRingBountyAmount;
+        }
+
+        // Clear ring group
+        setRingGroupInfo(ringGroupHash, 0, 0, 0);
+
+        // Log commitment
+        emit LogRingGroupCommitted(ringGroupHash);
+
+        // Claim gas
+        goodRingGroupBountyHolders[ringGroupHash] = 0;
+    }
 
     // ===
     // Dispute Handling
     // ===
-
-    event LogRingGroupRejected(
-        uint256 ringGroupHash
-    );
-
-    function rejectRingGroup(
-        uint256 ringGroupHash,
-        uint256[] outputIDs,
-        uint256[] keyImageHashes
-    ) internal {
-        for (uint256 i = 0; i < keyImageHashes.length; i++) {
-            if (i > 0) {
-                require(keyImageHashes[i-1] < keyImageHashes[i]);
-            }
-            require(keyImageToRingGroup[keyImageHashes[i]] == ringGroupHash);
-            keyImageToRingGroup[keyImageHashes[i]] = 0;
-        }
-        emit LogRingGroupRejected(ringGroupHash);
-        for (i = 0; i < outputIDs.length; i++) {
-            statusData[outputIDs[i]] = Status.Rejected;
-        }
-        setRingGroupInfo(ringGroupHash, 0, 0, 0);
-    }
 
     // Disputes late range proof submissions
     // =====================================
@@ -473,17 +531,34 @@ contract MonereumBlockchain is MonereumMemory {
         uint256[] rangeHashes,
         uint256[] keyImageHashes
     ) public {
+        // Match outputIDs with ringGroupHash
         uint256 ringGroupHash = uint256(keccak256(abi.encode(
             outputIDs,
             ringHashes,
             rangeHashes
         )));
+
+        // If not yet submitted, but range proofs are late,
         (, uint256 rangeProofsRemaining, uint256 timer) = getRingGroupInfo(ringGroupHash);
         require(rangeProofsRemaining != 0 && block.number >= timer);
+
+        // Check for enough keyImageHashes, and then reject the ring group
         require(keyImageHashes.length == ringHashes.length);
         rejectRingGroup(ringGroupHash, outputIDs, keyImageHashes);
+
+        // Award bounty for bad ring
         ethBalances[msg.sender] += badRingBountyAward;
     }
+
+    event LogRingGroupDisputed(
+        uint256 ringGroupHash,
+        uint256 disputedTopicHash
+    );
+
+    event LogRingGroupDisputeResolved(
+        uint256 ringGroupHash,
+        uint256 disputedTopicHash
+    );
 
     // Disputes a rangeProofHash
     // =========================
@@ -502,17 +577,37 @@ contract MonereumBlockchain is MonereumMemory {
         uint256[] rangeHashes,
         uint256 disputedTopicHash
     ) public {
+        // Calculate and validate ringGroupHash and disputedTopicHash
         uint256 ringGroupHash = uint256(keccak256(abi.encode(
             outputIDs,
             ringHashes,
             rangeHashes
         )));
+        require(isValidRingGroup(ringGroupHash), "ringGroup does not exist");
         require(isInSet(disputedTopicHash, ringHashes) || isInSet(disputedTopicHash, rangeHashes), "Incorrect Proof Hash");
+
+        // Prevent infinite disputing
         require(topicStatuses[ringGroupHash][disputedTopicHash] == ProofStatus.Unknown);
-        disputeRingGroup(
+
+        // Set ringGroup to be disputed
+        require(getStatus(outputIDs[0]) == Status.Pending, "Transaction is not pending");
+        for (uint256 i = 0; i < outputIDs.length; i++) {
+            statusData[outputIDs[i]] = Status.Disputed;
+        }
+
+        // Check if already disputed, and if not then assign disputer
+        require(badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] == 0, "Already disputed");
+        badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] = sender;
+
+        // Take bounty on bad ring
+        address sender = msg.sender;
+        require(ethBalances[sender] >= badRingBountyAmount, "Cannot afford bounty");
+        ethBalances[sender] -= badRingBountyAmount;
+
+        // Log dispute
+        emit LogRingGroupDisputed(
             ringGroupHash,
-            disputedTopicHash,
-            outputIDs
+            disputedTopicHash
         );
     }
 
@@ -540,7 +635,10 @@ contract MonereumBlockchain is MonereumMemory {
         if(topicStatuses[ringGroupHash][rangeProofHash] != ProofStatus.Unknown) {
             return;
         }
+
+        // Guarantees dispute comes before proving
         require(badDisputeTopicBountyHolders[ringGroupHash][rangeProofHash] != 0, "Range Proof is not disputed");
+
         bool isValid = mv.verifyRangeProof(
             commitment,
             rangeCommitments,
@@ -554,12 +652,6 @@ contract MonereumBlockchain is MonereumMemory {
         } else {
             topicStatuses[ringGroupHash][rangeProofHash] = ProofStatus.Rejected;
         }
-    }
-
-    struct ringProofVariables {
-        uint256 ringHash;
-        bool isValid;
-        uint256 commitmentX;
     }
 
     function resolveRingProof(
@@ -586,18 +678,17 @@ contract MonereumBlockchain is MonereumMemory {
         if(topicStatuses[ringGroupHash][v.ringHash] != ProofStatus.Unknown) {
             return;
         }
+
         require(badDisputeTopicBountyHolders[ringGroupHash][v.ringHash] != 0, "Ring Proof is not disputed");
+
+        // Check commitmentHash
         for (uint256 i = 0; i < MIXIN; i++) {
-            // Sqrt exists since transactions are validated
-            v.commitmentX = transactions[hashP(funds[i])];
-            v.commitmentX &= ~statusBit;
-            uint256 ySign = v.commitmentX >> signBitLocation;
-            v.commitmentX &= ~signBit;
-            require((commitments[i][1] & 1) == ySign, "Wrong square root for y");
-            require(commitments[i][0] == v.commitmentX, "Wrong commitment value");
-            require(eccvalid(commitments[i]), "commitment is not on curve");
+            v.commitmentHash = transactions[hashP(funds[i])];
+            v.commitmentHash &= ~statusBit;
+            require(hashP(commitments[i]) == v.commitmentHash, "Wrong commitment value");
         }
-        v.isValid = mv.verifyRingProof(
+
+        bool isValid = mv.verifyRingProof(
             funds,
             commitments,
             keyImage,
@@ -608,7 +699,7 @@ contract MonereumBlockchain is MonereumMemory {
             outputHash
         );
 
-        if (v.isValid) {
+        if (isValid) {
             topicStatuses[ringGroupHash][v.ringHash] = ProofStatus.Accepted;
         } else {
             topicStatuses[ringGroupHash][v.ringHash] = ProofStatus.Rejected;
@@ -638,7 +729,7 @@ contract MonereumBlockchain is MonereumMemory {
         uint256[] keyImageHashes,
         uint256 disputedTopicHash
     ) public {
-        require(keyImageHashes.length == ringHashes.length);
+        // Associate outputIDs with ringGroupHash
         uint256 ringGroupHash = uint256(keccak256(abi.encode(
             outputIDs,
             ringHashes,
@@ -651,20 +742,29 @@ contract MonereumBlockchain is MonereumMemory {
 
         ProofStatus disputedProofStatus = topicStatuses[ringGroupHash][disputedTopicHash];
         if (disputedProofStatus == ProofStatus.Accepted) {
+            // Resets ringGroup to Pending
             for(uint256 i = 0; i < outputIDs.length; i++) {
-                // Resets to Pending
                statusData[outputIDs[i]] = Status.NonExistant;
             }
             setRingGroupInfo(ringGroupHash, 0, 0, block.number + disputeTime);
-            emit LogRingGroupDisputeResolved(ringGroupHash, disputedTopicHash);
+
+            // Award bounty for good ring
             ethBalances[msg.sender] += goodRingBountyAward;
+
+            // Log resolution
+            emit LogRingGroupDisputeResolved(ringGroupHash, disputedTopicHash);
         } else if (disputedProofStatus == ProofStatus.Rejected) {
+            // Reject ring
+            require(keyImageHashes.length == ringHashes.length);
             rejectRingGroup(ringGroupHash, outputIDs, keyImageHashes);
+
+            // Award bounty for bad ring
             ethBalances[badRingBountyHolder] += badRingBountyAward;
         } else {
             require(false, "Proof status is still unknown");
         }
 
+        // Resolve dispute
         badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] = 0;
     }
 
@@ -739,40 +839,43 @@ contract MonereumBlockchain is MonereumMemory {
             (rangeCommitmentCheck << rangeCommitmentCheckBitLocation);
     }
 
-    function isValidRingGroup(uint256 ringGroupHash) public constant returns (bool) {
+    function isValidRingGroup(uint256 ringGroupHash) internal constant returns (bool) {
         (, uint256 remaining, uint256 ringGroupTime) = getRingGroupInfo(ringGroupHash);
         return ringGroupTime != 0 && remaining == 0;
     }
 
-    event LogRingGroupDisputed(
-        uint256 ringGroupHash,
-        uint256 disputedTopicHash
+    // Ring Group Rejected helper
+
+    event LogRingGroupRejected(
+        uint256 ringGroupHash
     );
 
-    event LogRingGroupDisputeResolved(
+    // Rejects the given ringGroupHash
+    // Assumes outputIDs is all outputs of the given ringGroupHash
+    // Assumes keyImageHashes is the correct length
+    // ============================================
+    // Requires that keyImageHashes is in order
+    // Requires that each keyImage maps to this Ring Group
+    // ---------------------------------------------------
+    // Sets transaction status to rejected, and clears ring group info
+    // Emits LogRingGroupRejected
+    // ==========================
+    function rejectRingGroup(
         uint256 ringGroupHash,
-        uint256 disputedTopicHash
-    );
-
-    // Dispute Ring Group Helper
-    function disputeRingGroup(
-        uint256 ringGroupHash,
-        uint256 disputedTopicHash,
-        uint256[] outputIDs
+        uint256[] outputIDs,
+        uint256[] keyImageHashes
     ) internal {
-        require(isValidRingGroup(ringGroupHash), "ringGroup does not exist");
-        require(getStatus(outputIDs[0]) == Status.Pending, "Transaction is not pending");
-        for (uint256 i = 0; i < outputIDs.length; i++) {
-            statusData[outputIDs[i]] = Status.Disputed;
+        for (uint256 i = 0; i < keyImageHashes.length; i++) {
+            if (i > 0) {
+                require(keyImageHashes[i-1] < keyImageHashes[i]);
+            }
+            require(keyImageToRingGroup[keyImageHashes[i]] == ringGroupHash);
+            keyImageToRingGroup[keyImageHashes[i]] = 0;
         }
-        address sender = msg.sender;
-        require(ethBalances[sender] >= badRingBountyAmount, "Cannot afford bounty");
-        ethBalances[sender] -= badRingBountyAmount;
-        require(badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] == 0, "Already disputed");
-        badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] = sender;
-        emit LogRingGroupDisputed(
-            ringGroupHash,
-            disputedTopicHash
-        );
+        emit LogRingGroupRejected(ringGroupHash);
+        for (i = 0; i < outputIDs.length; i++) {
+            statusData[outputIDs[i]] = Status.Rejected;
+        }
+        setRingGroupInfo(ringGroupHash, 0, 0, 0);
     }
 }

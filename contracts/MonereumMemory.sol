@@ -61,4 +61,37 @@ contract MonereumMemory is MonereumMath {
         uint256[MIXIN] commitmentProofs;
         uint256 outputHash;
     }
+
+    // Variable Structs
+    // Used to circumvent small EVM stack size
+
+    struct SubmitVariables {
+        uint256[2] keyImage;
+        uint256[2] commitmentSum;
+        uint256[2] minerFeeCommitment;
+        uint256 numOutputs;
+        uint256 numRangeProofs;
+        uint256 outputHash;
+        uint256 ringHash;
+        uint256 transactionID;
+        uint256 R;
+        uint256 i;
+        uint256 j;
+        uint256 minerFee;
+        uint256 commitmentHash;
+        uint256 ring;
+        uint256 bounty;
+        uint256 ringGroupHash;
+        uint256 outputID;
+        address sender;
+        uint256 rangeProofCommitmentCheck;
+        uint256[] ringHashes;
+        uint256[] outputIDs;
+        uint256 keyImageHash;
+    }
+
+    struct ringProofVariables {
+        uint256 ringHash;
+        uint256 commitmentX;
+    }
 }

@@ -18,7 +18,7 @@ module.exports = {
   ringGroupRejectedTopic: '0x' + hashFunc("LogRingGroupRejected(uint256)"),
   ringGroupDisputedTopic: '0x' + hashFunc("LogRingGroupDisputed(uint256,uint256)"),
   ringGroupDisputeResolvedTopic: '0x' + hashFunc("LogRingGroupDisputeResolved(uint256,uint256)"),
-  submitFuncHash: hashFunc("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],bytes,uint256[2])".replace(/MIXIN/g, mixin)),
+  submitRingGroupFuncHash: hashFunc("submitRingGroup(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],bytes,uint256[2])".replace(/MIXIN/g, mixin)),
   submitRangeProofFuncHash: hashFunc("submitRangeProof(uint256[],uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])"),
   commitRingGroupFuncHash: hashFunc("commitRingGroup(uint256[],uint256[],uint256[])"),
   mintFuncHash: hashFunc("mint(uint256[2],uint256[2],uint256)"),

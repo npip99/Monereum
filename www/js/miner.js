@@ -138,7 +138,7 @@ class Miner {
       console.error(error)
       return null
     }
-    const data = constants.submitFuncHash.slice(0, 4*2) + abi.format(...submit)
+    const data = constants.submitRingGroupFuncHash.slice(0, 4*2) + abi.format(...submit)
     this.web3.eth.sendTransaction({
         to: constants.blockchain,
         data: data,
