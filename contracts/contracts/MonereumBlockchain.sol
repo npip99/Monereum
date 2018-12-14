@@ -78,13 +78,13 @@ contract MonereumBlockchain is MonereumMemory {
         )));
         require(isValidRingGroup(ringGroupHash), "ringGroup is not valid");
         (,, uint256 ringGroupTime) = getRingGroupInfo(ringGroupHash);
-        require(ringGroupTime <= block.timestamp, "Not enough time has passed");
+        require(block.number >= ringGroupTime, "Not enough time has passed");
         require(getStatus(outputIDs[0]) == Status.Pending, "Transaction is not pending");
         for (uint256 i = 0; i < outputIDs.length; i++) {
             // Set to accepting
             transactions[outputIDs[i]] |= statusBit;
         }
-        if (ringGroupTime + disputeTime <= block.timestamp) {
+        if (block.number >= ringGroupTime + disputeTime) {
             ethBalances[msg.sender] += goodRingBountyAmount;
         } else {
             ethBalances[goodRingGroupBountyHolders[ringGroupHash]] += goodRingBountyAmount;
@@ -102,9 +102,9 @@ contract MonereumBlockchain is MonereumMemory {
     // rangeProofCommitment[ringGroupHash][rangeProofHash] = 0
     // rangeProofsRemaining[ringGroupHash]--
     // If rangeProofsRemaining == 0
-    //     ringGroupTimes[ringGroupHash] = block.timestamp + disputeTime
+    //     ringGroupTimes[ringGroupHash] = block.number + disputeTime
 
-    function logRangeProof(
+    function submitRangeProof(
         // Used to get ringGroupHash and connect to outputIDs
         uint256[] outputIDs,
         uint256[] ringHashes,
@@ -149,7 +149,7 @@ contract MonereumBlockchain is MonereumMemory {
         rangeProofsRemaining--;
         if (rangeProofsRemaining == 0) {
             if (rangeCommitmentCheck == 0) {
-                setRingGroupInfo(ringGroupHash, 0, 0, block.timestamp + disputeTime);
+                setRingGroupInfo(ringGroupHash, 0, 0, block.number + disputeTime);
             } else {
                 require(false, "Ring Commitments did not match");
             }
@@ -351,7 +351,7 @@ contract MonereumBlockchain is MonereumMemory {
             v.commitmentSum = ecadd(v.commitmentSum, [outputCommitments[v.i][0], p - outputCommitments[v.i][1]]);
         }
         v.rangeProofCommitmentCheck &= rangeCommitmentCheckBitMask;
-        setRingGroupInfo(v.ringGroupHash, v.rangeProofCommitmentCheck, v.numOutputs, block.timestamp + disputeTime);
+        setRingGroupInfo(v.ringGroupHash, v.rangeProofCommitmentCheck, v.numOutputs, block.number + disputeTime);
 
         if (v.minerFee == 0) {
             v.minerFeeCommitment = [uint256(0), uint256(0)];
@@ -459,6 +459,14 @@ contract MonereumBlockchain is MonereumMemory {
         setRingGroupInfo(ringGroupHash, 0, 0, 0);
     }
 
+    // Disputes late range proof submissions
+    // =====================================
+    // Requires ringGroup to not have been fully submitted (With range proofs)
+    // Requires disputeTime to have passed since initial submission
+    // ------------------------------------------------------------
+    // Rejects the ring group
+    // Awards bounty to disputer
+    // =========================
     function disputeLateRangeProof(
         uint256[] outputIDs,
         uint256[] ringHashes,
@@ -471,7 +479,7 @@ contract MonereumBlockchain is MonereumMemory {
             rangeHashes
         )));
         (, uint256 rangeProofsRemaining, uint256 timer) = getRingGroupInfo(ringGroupHash);
-        require(rangeProofsRemaining != 0 && timer < block.timestamp);
+        require(rangeProofsRemaining != 0 && block.number >= timer);
         require(keyImageHashes.length == ringHashes.length);
         rejectRingGroup(ringGroupHash, outputIDs, keyImageHashes);
         ethBalances[msg.sender] += badRingBountyAward;
@@ -488,22 +496,22 @@ contract MonereumBlockchain is MonereumMemory {
     // Sets rangeProof's disputer to msg.sender (It is now 'actively disputed')
     // Reduces disputer's balance by badRingBountyAmount
     // =================================================
-    function disputeRangeProof(
+    function disputeTopic(
         uint256[] outputIDs,
         uint256[] ringHashes,
         uint256[] rangeHashes,
-        uint256 rangeProofHash
+        uint256 disputedTopicHash
     ) public {
         uint256 ringGroupHash = uint256(keccak256(abi.encode(
             outputIDs,
             ringHashes,
             rangeHashes
         )));
-        require(isInSet(rangeProofHash, rangeHashes), "Incorrect Range Proof Hash");
-        require(topicStatuses[ringGroupHash][rangeProofHash] == ProofStatus.Unknown);
+        require(isInSet(disputedTopicHash, ringHashes) || isInSet(disputedTopicHash, rangeHashes), "Incorrect Proof Hash");
+        require(topicStatuses[ringGroupHash][disputedTopicHash] == ProofStatus.Unknown);
         disputeRingGroup(
             ringGroupHash,
-            rangeProofHash,
+            disputedTopicHash,
             outputIDs
         );
     }
@@ -529,7 +537,9 @@ contract MonereumBlockchain is MonereumMemory {
             rangeProofs,
             indices
         )));
-        require(topicStatuses[ringGroupHash][rangeProofHash] == ProofStatus.Unknown);
+        if(topicStatuses[ringGroupHash][rangeProofHash] != ProofStatus.Unknown) {
+            return;
+        }
         require(badDisputeTopicBountyHolders[ringGroupHash][rangeProofHash] != 0, "Range Proof is not disputed");
         bool isValid = mv.verifyRangeProof(
             commitment,
@@ -544,100 +554,6 @@ contract MonereumBlockchain is MonereumMemory {
         } else {
             topicStatuses[ringGroupHash][rangeProofHash] = ProofStatus.Rejected;
         }
-    }
-
-    // Claims rangeProof bounty
-    // ========================
-    // Requires outputIDs linked to ringGroupHash
-    // Requires the rangeProof to be actively disputed
-    // Requires the rangeProof to be proven or disproven
-    // -------------------------------------------------
-    // If Proof Accepted:
-    //   Sets outputIDs to pending
-    //   Sets ringGroupHash's timer to Now + disputeTime
-    //   Raises submitter's balance by goodRingBountyAward
-    // If Proof Rejected:
-    //   Sets outputIDs to Rejected
-    //   Sets ringGroupHash's timer to 0
-    //   Raises disputer's balance by badRingBountyAward
-    // Sets the rangeProof's disputer to null (Not actively disputed anymore)
-    // ======================================================================
-    function claimRangeProofBounty(
-        uint256[] outputIDs,
-        uint256[] ringHashes,
-        uint256[] rangeHashes,
-        uint256[] keyImageHashes,
-        uint256[2] commitment,
-        uint256[2][] rangeCommitments,
-        uint256[] rangeBorromeans,
-        uint256[2][] rangeProofs,
-        uint256[] indices
-    ) public {
-        uint256 ringGroupHash = uint256(keccak256(abi.encode(
-            outputIDs,
-            ringHashes,
-            rangeHashes
-        )));
-        uint256 rangeProofHash = uint256(keccak256(abi.encode(
-            commitment,
-            rangeCommitments,
-            rangeBorromeans,
-            rangeProofs,
-            indices
-        )));
-        address badRingBountyHolder = badDisputeTopicBountyHolders[ringGroupHash][rangeProofHash];
-        require(badRingBountyHolder != 0, "rangeProof is not contested");
-        ProofStatus disputedRingStatus = topicStatuses[ringGroupHash][rangeProofHash];
-        require(keyImageHashes.length == ringHashes.length);
-        resolveDisputeClaim(
-            outputIDs,
-            keyImageHashes,
-            ringGroupHash,
-            badRingBountyHolder,
-            disputedRingStatus
-        );
-        badDisputeTopicBountyHolders[ringGroupHash][rangeProofHash] = 0;
-    }
-
-    function isInSet(uint256 val, uint256[] set) internal pure returns (bool) {
-        bool found = false;
-        for(uint256 i = 0; i < set.length; i++) {
-            if (set[i] == val) {
-                found = true;
-            }
-        }
-        return found;
-    }
-
-    // Disputes a ringProofHash
-    // =========================
-    // Requires a link between outputIDs and ringGroupHash, and between ringProofHash and ringGroupHash
-    // Requires the range proof to be unproven
-    // Requires ringGroupHash to exist and be pending
-    // Requires rangeProofHash to be not actively disputed
-    // ---------------------------------------------------
-    // Sets ringGroupHash to disputed
-    // Sets rangeProof's disputer to msg.sender (Causes it to be considered 'actively disputed')
-    // Reduces disputer's balance by badRingBountyAmount
-    // =================================================
-    function disputeRingProof(
-        uint256[] outputIDs,
-        uint256[] ringHashes,
-        uint256[] rangeHashes,
-        uint256 ringHash
-    ) public {
-        uint256 ringGroupHash = uint256(keccak256(abi.encode(
-            outputIDs,
-            ringHashes,
-            rangeHashes
-        )));
-        require(isInSet(ringHash, ringHashes), "ringHash is not in ringGroup");
-        require(topicStatuses[ringGroupHash][ringHash] == ProofStatus.Unknown, "ring has already been contested");
-        disputeRingGroup(
-            ringGroupHash,
-            ringHash,
-            outputIDs
-        );
     }
 
     struct ringProofVariables {
@@ -667,7 +583,9 @@ contract MonereumBlockchain is MonereumMemory {
             commitmentProofs,
             outputHash
         )));
-        require(topicStatuses[ringGroupHash][v.ringHash] == ProofStatus.Unknown);
+        if(topicStatuses[ringGroupHash][v.ringHash] != ProofStatus.Unknown) {
+            return;
+        }
         require(badDisputeTopicBountyHolders[ringGroupHash][v.ringHash] != 0, "Ring Proof is not disputed");
         for (uint256 i = 0; i < MIXIN; i++) {
             // Sqrt exists since transactions are validated
@@ -697,39 +615,93 @@ contract MonereumBlockchain is MonereumMemory {
         }
     }
 
-    function claimRingProofBounty(
+    // Claims dispute topic bounty
+    // ========================
+    // Requires outputIDs linked to ringGroupHash
+    // Requires the rangeProof to be actively disputed
+    // Requires the rangeProof to be proven or disproven
+    // -------------------------------------------------
+    // If Proof Accepted:
+    //   Sets outputIDs to pending
+    //   Sets ringGroupHash's timer to Now + disputeTime
+    //   Raises submitter's balance by goodRingBountyAward
+    // If Proof Rejected:
+    //   Sets outputIDs to Rejected
+    //   Sets ringGroupHash's timer to 0
+    //   Raises disputer's balance by badRingBountyAward
+    // Sets the rangeProof's disputer to null (Not actively disputed anymore)
+    // ======================================================================
+    function claimDisputeTopicBounty(
         uint256[] outputIDs,
         uint256[] ringHashes,
         uint256[] rangeHashes,
         uint256[] keyImageHashes,
-        uint256 ringHash
+        uint256 disputedTopicHash
     ) public {
+        require(keyImageHashes.length == ringHashes.length);
         uint256 ringGroupHash = uint256(keccak256(abi.encode(
             outputIDs,
             ringHashes,
             rangeHashes
         )));
         require(isValidRingGroup(ringGroupHash), "ringGroup does not exist");
-        address badRingBountyHolder = badDisputeTopicBountyHolders[ringGroupHash][ringHash];
-        // Checks if this is the disputed ring
-        require(badRingBountyHolder != 0, "ring is not disputed");
-        ProofStatus disputedRingStatus = topicStatuses[ringGroupHash][ringHash];
-        require(keyImageHashes.length == ringHashes.length);
-        resolveDisputeClaim(
-            outputIDs,
-            keyImageHashes,
-            ringGroupHash,
-            badRingBountyHolder,
-            disputedRingStatus
-        );
 
-        // Ring is no longer being disputed
-        badDisputeTopicBountyHolders[ringGroupHash][ringHash] = 0;
+        address badRingBountyHolder = badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash];
+        require(badRingBountyHolder != 0, "Disputed topic is not disputed");
+
+        ProofStatus disputedProofStatus = topicStatuses[ringGroupHash][disputedTopicHash];
+        if (disputedProofStatus == ProofStatus.Accepted) {
+            for(uint256 i = 0; i < outputIDs.length; i++) {
+                // Resets to Pending
+               statusData[outputIDs[i]] = Status.NonExistant;
+            }
+            setRingGroupInfo(ringGroupHash, 0, 0, block.number + disputeTime);
+            emit LogRingGroupDisputeResolved(ringGroupHash, disputedTopicHash);
+            ethBalances[msg.sender] += goodRingBountyAward;
+        } else if (disputedProofStatus == ProofStatus.Rejected) {
+            rejectRingGroup(ringGroupHash, outputIDs, keyImageHashes);
+            ethBalances[badRingBountyHolder] += badRingBountyAward;
+        } else {
+            require(false, "Proof status is still unknown");
+        }
+
+        badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] = 0;
+    }
+
+    // Ethereum Balance Handler
+
+    function getBalance(address addr) public view returns (uint256) {
+        return ethBalances[addr];
+    }
+
+    function withdrawEthereum(uint256 amount) public {
+        address sender = msg.sender;
+        require(ethBalances[sender] >= amount, "Not enough funds");
+        ethBalances[sender] -= amount;
+        sender.transfer(amount);
+    }
+
+    function depositEthereum(
+        address addr,
+        uint256 amount
+    ) public payable {
+        // ethBalances[addr] += msg.value;
+        ethBalances[addr] += amount;
     }
 
     // ===
     // Helpers
     // ===
+
+    function isInSet(uint256 val, uint256[] set) internal pure returns (bool) {
+        bool found = false;
+        for(uint256 i = 0; i < set.length; i++) {
+            if (set[i] == val) {
+                found = true;
+            }
+        }
+        return found;
+    }
 
     // Status Formatter Helper
 
@@ -772,26 +744,15 @@ contract MonereumBlockchain is MonereumMemory {
         return ringGroupTime != 0 && remaining == 0;
     }
 
-    // Ethereum Balance Handler
+    event LogRingGroupDisputed(
+        uint256 ringGroupHash,
+        uint256 disputedTopicHash
+    );
 
-    function getBalance(address addr) public view returns (uint256) {
-        return ethBalances[addr];
-    }
-
-    function withdrawEthereum(uint256 amount) public {
-        address sender = msg.sender;
-        require(ethBalances[sender] >= amount, "Not enough funds");
-        ethBalances[sender] -= amount;
-        sender.transfer(amount);
-    }
-
-    function depositEthereum(
-        address addr,
-        uint256 amount
-    ) public payable {
-        // ethBalances[addr] += msg.value;
-        ethBalances[addr] += amount;
-    }
+    event LogRingGroupDisputeResolved(
+        uint256 ringGroupHash,
+        uint256 disputedTopicHash
+    );
 
     // Dispute Ring Group Helper
     function disputeRingGroup(
@@ -809,29 +770,9 @@ contract MonereumBlockchain is MonereumMemory {
         ethBalances[sender] -= badRingBountyAmount;
         require(badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] == 0, "Already disputed");
         badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] = sender;
-    }
-
-    // Resolve Dispute Claim Helper
-    function resolveDisputeClaim(
-        uint256[] outputIDs,
-        uint256[] keyImageHashes,
-        uint256 ringGroupHash,
-        address badRingBountyHolder,
-        ProofStatus disputedProofStatus
-    ) internal {
-        require(isValidRingGroup(ringGroupHash), "ringGroup does not exist");
-        if (disputedProofStatus == ProofStatus.Accepted) {
-            for(uint256 i = 0; i < outputIDs.length; i++) {
-                // Resets to Pending
-               statusData[outputIDs[i]] = Status.NonExistant;
-            }
-            setRingGroupInfo(ringGroupHash, 0, 0, block.timestamp + disputeTime);
-            ethBalances[msg.sender] += goodRingBountyAward;
-        } else if (disputedProofStatus == ProofStatus.Rejected) {
-            rejectRingGroup(ringGroupHash, outputIDs, keyImageHashes);
-            ethBalances[badRingBountyHolder] += badRingBountyAward;
-        } else {
-            require(false, "Proof status is still unknown");
-        }
+        emit LogRingGroupDisputed(
+            ringGroupHash,
+            disputedTopicHash
+        );
     }
 }

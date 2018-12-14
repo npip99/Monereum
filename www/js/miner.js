@@ -43,11 +43,11 @@ class Miner {
             to: constants.blockchain,
             data: data,
             gasPrice: 5e9,
-          }, (error, hash) => {
+          }, (error, transactionHash) => {
             if (error) {
-              console.error("Range Proof Submission Failed")
+              console.error("Range Proof Submission Failed: ", error)
             } else {
-              console.log("Range Proof Submission Sent")
+              console.log("Range Proof Submission Sent: ", transactionHash)
             }
           })
         })
@@ -82,11 +82,11 @@ class Miner {
                   to: constants.blockchain,
                   data: data,
                   gasPrice: 5e9,
-                }, (error, hash) => {
+                }, (error, transactionHash) => {
                   if (error) {
-                    console.error("Ring Group Commit Failed")
+                    console.error("Ring Group Commit Failed", error)
                   } else {
-                    console.log("Ring Group Commit Sent")
+                    console.log("Ring Group Commit Sent: ", transactionHash)
                   }
                 })
               }
@@ -107,11 +107,11 @@ class Miner {
         to: constants.blockchain,
         data: data,
         gasPrice: 5e9,
-    }, (error, hash) => {
+    }, (error, transactionHash) => {
       if (error) {
         console.error("Mint Failed: ", error)
       } else {
-        console.log("Mint Sent: ", hash)
+        console.log("Mint Sent: ", transactionHash)
       }
     })
   }
@@ -143,12 +143,12 @@ class Miner {
         to: constants.blockchain,
         data: data,
         gasPrice: 5e9,
-    }, (error, hash) => {
+    }, (error, transactionHash) => {
       if (error) {
         console.error("Ring Group Submission Failed")
       } else {
         this.pending[ringGroupHash] = {rangeProofs, rangeHashes, ringHashes, outputIDs}
-        console.log("Ring Group Submission Sent: ", hash)
+        console.log("Ring Group Submission Sent: ", transactionHash)
       }
     })
   }

@@ -11,6 +11,9 @@ class Disputer {
     this.handler = new TXHandler(wallet, web3, true)
     this.doneSyncing = true
 
+    this.ringGroupDisputed = {}
+    this.ringGroupDisputeResolved = {}
+
     this.disputed = {}
     this.submittedLateRingGroup = {}
     this.disputedLateRangeProof = {}
@@ -86,7 +89,7 @@ class Disputer {
     const ringGroupHash = Parser.parseNum(parser)
     const topicHash = Parser.parseNum(parser)
 
-    
+    console.log(result)
   }
 
   handleRingGroupDisputeResolvedResult(result) {
@@ -144,12 +147,12 @@ class Disputer {
   }
 
   submitLateRingGroup(ringGroupData) {
-    const ringGroupHash = ringGroupData.ringGroup.ringGroupHash.toString(16)
-    if (this.submittedLateRingGroup[ringGroupHash]) {
+    const ringGroupHashHex = ringGroupData.ringGroup.ringGroupHash.toString(16)
+    if (this.submittedLateRingGroup[ringGroupHashHex]) {
       return
     }
-    this.submittedLateRingGroup[ringGroupHash] = true
-    console.log("Late Ring Group Found", "(" + ringGroupHash + ")")
+    this.submittedLateRingGroup[ringGroupHashHex] = true
+    console.log("Late Ring Group Found", "(" + ringGroupHashHex + ")")
     const outputIDs = ringGroupData.ringGroup.outputIDs
     const ringHashes = ringGroupData.ringGroup.ringHashes
     const rangeHashes = ringGroupData.ringGroup.rangeHashes
@@ -159,22 +162,22 @@ class Disputer {
       to: constants.blockchain,
       data: data,
       gasPrice: 5e9,
-    }, (error, hash) => {
+    }, (error, transactionHash) => {
       if (error) {
-        console.error("Ring Group Commit Failed")
+        console.error("Ring Group Commit Failed: ", error)
       } else {
-        console.log("Ring Group Commit Sent")
+        console.log("Ring Group Commit Sent: ", transactionHash)
       }
     })
   }
 
   disputeLateRangeProof(ringGroupData) {
-    const ringGroupHash = ringGroupData.ringGroup.ringGroupHash.toString(16)
-    if (this.disputedLateRangeProof[ringGroupHash]) {
+    const ringGroupHashHex = ringGroupData.ringGroup.ringGroupHash.toString(16)
+    if (this.disputedLateRangeProof[ringGroupHashHex]) {
       return
     }
-    this.disputedLateRangeProof[ringGroupHash] = true
-    console.log("Late Ring Proof Found", "(" + ringGroupHash + ")")
+    this.disputedLateRangeProof[ringGroupHashHex] = true
+    console.log("Late Ring Proof Found", "(" + ringGroupHashHex + ")")
     const outputIDs = ringGroupData.ringGroup.outputIDs
     const ringHashes = ringGroupData.ringGroup.ringHashes
     const rangeHashes = ringGroupData.ringGroup.rangeHashes
@@ -185,11 +188,11 @@ class Disputer {
         to: constants.blockchain,
         data: data,
         gasPrice: 5e9,
-    }, (error, hash) => {
+    }, (error, transactionHash) => {
       if (error) {
         console.error("Late Range Proof Dispute Failed: ", error)
       } else {
-        console.log("Late Range Proof Dispute Sent: ", hash)
+        console.log("Late Range Proof Dispute Sent: ", transactionHash)
       }
     })
   }
@@ -200,9 +203,7 @@ class Disputer {
 
   disputeRangeProof(ringGroupData, rangeProof) {
     console.log(ringGroupData, rangeProof)
-    const outputIDs = ringGroupData.ringGroup.outputIDs
-    const ringHashes = ringGroupData.ringGroup.ringHashes
-    const rangeHashes = ringGroupData.ringGroup.rangeHashes
+    const ringGroupHashHex = ringGroupData.ringGroup.rinGroupHash.toString(16)
     let rangeHash
     for (const [i, rp] of ringGroupData.rangeProofs.entries()) {
       if (rp == rangeProof) {
@@ -210,6 +211,18 @@ class Disputer {
         break
       }
     }
+    const rangeHashHex = rangeHash.toString(16)
+    if (!this.disputedRangeProof[ringGroupHashHex]) {
+      this.disputedRangeProof[ringGroupHashHex] = {}
+    }
+    if (this.disputedRangeProof[ringGroupHashHex][rangeHashHex]) {
+      return
+    }
+    this.disputedRangeProof[ringGroupHashHex][rangeHashHex] = true
+
+    const outputIDs = ringGroupData.ringGroup.outputIDs
+    const ringHashes = ringGroupData.ringGroup.ringHashes
+    const rangeHashes = ringGroupData.ringGroup.rangeHashes
     console.log(outputIDs, ringHashes, rangeHashes, rangeHash)
     const funcHash = constants.disputeRangeProofFuncHash
     const data = funcHash.slice(0, 4*2) + abi.format(outputIDs, ringHashes, rangeHashes, rangeHash)
@@ -217,11 +230,12 @@ class Disputer {
         to: constants.blockchain,
         data: data,
         gasPrice: 5e9,
-    }, (error, hash) => {
+    }, (error, transactionHash) => {
+      this.disputedRangeProof[ringGroupHashHex][rangeHashHex] = transactionHash
       if (error) {
         console.error("Range Proof Dispute Failed: ", error)
       } else {
-        console.log("Range Proof Dispute Succeeded: ", hash)
+        console.log("Range Proof Dispute Succeeded: ", transactionHash)
       }
     })
   }
