@@ -683,9 +683,9 @@ contract MonereumBlockchain is MonereumMemory {
 
         // Check commitmentHash
         for (uint256 i = 0; i < MIXIN; i++) {
-            v.commitmentHash = transactions[hashP(funds[i])];
-            v.commitmentHash &= ~statusBit;
-            require(hashP(commitments[i]) == v.commitmentHash, "Wrong commitment value");
+            uint256 commitmentHash = transactions[hashP(funds[i])];
+            commitmentHash &= ~statusBit;
+            require(hashP(commitments[i]) == commitmentHash, "Wrong commitment value");
         }
 
         bool isValid = mv.verifyRingProof(

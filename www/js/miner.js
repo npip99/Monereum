@@ -71,11 +71,9 @@ class Miner {
         console.log("Range Proof of ", rangeProof.ringGroupHash.toString(16), " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
         if((--this.rangeProofsRemaining[rangeProof.ringGroupHash]) == 0) {
           const timerBlock = result.blockNumber
-          const submitRingGroupTimer = setInterval(() => {
+          const trySubmitRingGroup = () => {
             web3.eth.getBlockNumber((error, result) => {
-              if (submitRingGroupTimer && result >= timerBlock + constants.disputeTime ) {
-                clearInterval(submitRingGroupTimer)
-                submitRingGroupTimer = null
+              if (result >= timerBlock + constants.disputeTime) {
                 const {outputIDs, ringHashes, rangeHashes} = this.pending[rangeProof.ringGroupHash]
                 const data = constants.commitRingGroupFuncHash.slice(0, 4*2) + abi.format(outputIDs, ringHashes, rangeHashes)
                 this.web3.eth.sendTransaction({
@@ -89,9 +87,12 @@ class Miner {
                     console.log("Ring Group Commit Sent: ", transactionHash)
                   }
                 })
+              } else {
+                setTimeout(trySubmitRingGroup, 75)
               }
             })
-          }, 250)
+          }
+          setTimeout(trySubmitRingGroup, 75)
         }
       }
     })

@@ -70,9 +70,7 @@ contract MonereumMemory is MonereumMath {
         uint256[2] commitmentSum;
         uint256[2] minerFeeCommitment;
         uint256 numOutputs;
-        uint256 numRangeProofs;
         uint256 outputHash;
-        uint256 ringHash;
         uint256 transactionID;
         uint256 R;
         uint256 i;
@@ -80,7 +78,6 @@ contract MonereumMemory is MonereumMath {
         uint256 minerFee;
         uint256 commitmentHash;
         uint256 ring;
-        uint256 bounty;
         uint256 ringGroupHash;
         uint256 outputID;
         address sender;
@@ -92,6 +89,5 @@ contract MonereumMemory is MonereumMath {
 
     struct ringProofVariables {
         uint256 ringHash;
-        uint256 commitmentX;
     }
 }

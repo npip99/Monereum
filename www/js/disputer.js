@@ -115,7 +115,7 @@ class Disputer {
         continue
       }
       if (ringGroupData.isValid
-      && this.handler.position >= ringGroupData.timerBlock + constants.disputeTime) {
+      && this.handler.position >= ringGroupData.timerBlock + 2 * constants.disputeTime) {
         this.submitLateRingGroup(ringGroupData)
         continue
       }
