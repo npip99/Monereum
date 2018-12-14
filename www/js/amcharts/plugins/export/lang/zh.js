@@ -1,4 +1,4 @@
-﻿AmCharts.translations[ "export" ][ "zh" ] = {
+AmCharts.translations[ "export" ][ "zh" ] = {
 	"fallback.save.text": "CTRL + C 复制数据到剪贴板。",
 	"fallback.save.image": "Rightclick -> 保存图片为... 保存图片。",
 
