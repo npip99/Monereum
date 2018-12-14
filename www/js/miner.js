@@ -1,10 +1,12 @@
-const wallet = require('./wallet')
-const {hash, format, funcHash} = require('./abi')
-const parser = require('./parser')
+const abi = require('./abi')
 const constants = require('./constants')
 const pt = require('./ecc-point')
 const bigInt = require('big-integer')
+const Parser = require('./parser')
 
+const hash = abi.hash
+
+// [5, 6, 7], ["a", "b", "c"], [true, false, true] => [5, "a", true], [6, "b", false], [7, "c", true]
 const zip = (arr, ...arrs) => {
   return arr.map((val, i) => arrs.reduce((a, arr) => [...a, arr[i]], [val]));
 }
@@ -29,22 +31,23 @@ class Miner {
         return
       }
       this.watched[result.transactionHash] = true
-      const {ringGroupHash, outputIDs, ringHashes} = parser.parseRingGroup(parser.initParser(result.data))
+      const {ringGroupHash, outputIDs, ringHashes} = Parser.parseRingGroup(Parser.initParser(result.data))
       const ringGroupData = this.pending[ringGroupHash]
       if (ringGroupData) {
         console.log("Ring Group Recognized: ", ringGroupHash.toString(16))
         const rangeProofs = ringGroupData.rangeProofs
         this.rangeProofsRemaining[ringGroupHash] = rangeProofs.length
-        const func = funcHash("logRangeProof(uint256[],uint256[],uint256[],uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])")
         rangeProofs.forEach(rp => {
-          const data = func.slice(0, 4*2) + format(...rp)
+          const data = constants.submitRangeProofFuncHash.slice(0, 4*2) + abi.format(...rp)
           this.web3.eth.sendTransaction({
             to: constants.blockchain,
             data: data,
             gasPrice: 5e9,
           }, (error, hash) => {
             if (error) {
-              console.error("Range Proof Failed")
+              console.error("Range Proof Submission Failed")
+            } else {
+              console.log("Range Proof Submission Sent")
             }
           })
         })
@@ -63,24 +66,32 @@ class Miner {
         return
       }
       this.watched[result.transactionHash] = true
-      const rangeProof = parser.parseRangeProof(parser.initParser(result.data))
+      const rangeProof = Parser.parseRangeProof(Parser.initParser(result.data))
       if (this.rangeProofsRemaining[rangeProof.ringGroupHash]) {
         console.log("Range Proof of ", rangeProof.ringGroupHash.toString(16), " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
         if((--this.rangeProofsRemaining[rangeProof.ringGroupHash]) == 0) {
-          setTimeout(() => {
-            const {outputIDs, ringHashes, rangeHashes} = this.pending[rangeProof.ringGroupHash]
-            const func = funcHash("commitRingGroup(uint256[],uint256[],uint256[])")
-            const data = func.slice(0, 4*2) + format(outputIDs, ringHashes, rangeHashes)
-            this.web3.eth.sendTransaction({
-              to: constants.blockchain,
-              data: data,
-              gasPrice: 5e9,
-            }, (error, hash) => {
-              if (error) {
-                console.error("Ring Group Commit Failed")
+          const timerBlock = result.blockNumber
+          const submitRingGroupTimer = setInterval(() => {
+            web3.eth.getBlockNumber((error, result) => {
+              if (submitRingGroupTimer && result >= timerBlock + constants.disputeTime ) {
+                clearInterval(submitRingGroupTimer)
+                submitRingGroupTimer = null
+                const {outputIDs, ringHashes, rangeHashes} = this.pending[rangeProof.ringGroupHash]
+                const data = constants.commitRingGroupFuncHash.slice(0, 4*2) + abi.format(outputIDs, ringHashes, rangeHashes)
+                this.web3.eth.sendTransaction({
+                  to: constants.blockchain,
+                  data: data,
+                  gasPrice: 5e9,
+                }, (error, hash) => {
+                  if (error) {
+                    console.error("Ring Group Commit Failed")
+                  } else {
+                    console.log("Ring Group Commit Sent")
+                  }
+                })
               }
             })
-          }, constants.disputeTime*1000)
+          }, 250)
         }
       }
     })
@@ -91,8 +102,7 @@ class Miner {
   }
 
   mint(tx) {
-    const func = funcHash("mint(uint256[2],uint256[2],uint256)")
-    const data = func.slice(0, 4*2) + format(tx.src, tx.dest, tx.commitmentAmount)
+    const data = constants.mintFuncHash.slice(0, 4*2) + abi.format(tx.src, tx.dest, tx.commitmentAmount)
     this.web3.eth.sendTransaction({
         to: constants.blockchain,
         data: data,
@@ -101,7 +111,7 @@ class Miner {
       if (error) {
         console.error("Mint Failed: ", error)
       } else {
-        console.log("Mint Succeeded: ", hash)
+        console.log("Mint Sent: ", hash)
       }
     })
   }
@@ -114,32 +124,31 @@ class Miner {
     for (const ringProof of tx.ringProofs) {
       if (!this.wallet.verifyRingProof(ringProof)) {
         console.log("Invalid Ring Proof")
-        //return null
+        return null
       }
     }
     for (const rangeProof of tx.rangeProofs) {
       if (!this.wallet.verifyRangeProof(rangeProof)) {
         console.log("Invalid Range Proof")
-        //return null
+        return null
       }
     }
     const {ringGroupHash, ringHashes, rangeHashes, outputIDs, submit, rangeProofs, error} = this.formatSubmit(tx)
     if (error) {
       console.error(error)
-      //return null
+      return null
     }
-    const func = funcHash("submit(uint256[2][MIXIN][],uint256[2][],uint256[2][],uint256[],uint256[MIXIN][],uint256[MIXIN][],uint256[],uint256[2][],uint256[2][],uint256[2][],uint256[],bytes,uint256[2])".replace(/MIXIN/g, constants.mixin))
-    const data = func.slice(0, 4*2) + format(...submit)
+    const data = constants.submitFuncHash.slice(0, 4*2) + abi.format(...submit)
     this.web3.eth.sendTransaction({
         to: constants.blockchain,
         data: data,
         gasPrice: 5e9,
     }, (error, hash) => {
       if (error) {
-        console.error("Submit Failed")
+        console.error("Ring Group Submission Failed")
       } else {
         this.pending[ringGroupHash] = {rangeProofs, rangeHashes, ringHashes, outputIDs}
-        console.log("Submit Succeeded: ", hash)
+        console.log("Ring Group Submission Sent: ", hash)
       }
     })
   }

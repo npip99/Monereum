@@ -110,7 +110,7 @@ const format = function() {
 }
 
 // Creates hash for Solidity functions
-const funcHash = function(str) {
+const hashFunc = function(str) {
   let hex = "";
   for (let i = 0; i < str.length; i++) {
       digit = str.charCodeAt(i).toString(16);
@@ -134,7 +134,7 @@ const hash = function() {
 
 const abi = {
   format,
-  funcHash,
+  hashFunc,
   hash,
   padPtOrInt,
   padPt,

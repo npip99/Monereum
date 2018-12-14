@@ -1,12 +1,12 @@
-const wallet = require('./wallet')
+const Wallet = require('./wallet')
 const bigInt = require('big-integer')
 const abi = require('./abi')
 const pt = require('./ecc-point')
-const txhandler = require('./txhandler')
-const miner = require('./miner')
+const TXHandler = require('./txhandler')
+const Miner = require('./miner')
 const constants = require('./constants')
-const parser = require('./parser')
-const disputer = require('./disputer')
+const Parser = require('./parser')
+const Disputer = require('./disputer')
 const aes = require('aes-js')
 
 window.addEventListener('load', async () => {
@@ -40,8 +40,8 @@ window.addEventListener('load', async () => {
     window.pt = pt
     window.bigInt = bigInt
     window.abi = abi
-    window.parser = parser
-    window.disputer = disputer
+    window.parser = Parser
+    window.disputer = Disputer
     const result = document.getElementById("result")
     const log = document.getElementById("log")
     let refreshTimer = null
@@ -61,23 +61,26 @@ window.addEventListener('load', async () => {
         document.getElementById("miner_form").style = "display: block;"
         document.getElementById("wallet_form").style = "display: none;"
         setTimeout(() => {
-          window.person = new wallet("miner" + Math.random())
-          window.m = new miner(person, window.web3)
-          window.d = new disputer(person, window.web3)
-          window.web3.eth.getBlockNumber((error, result) => {
-            d.handler.sync(result)
-            //d.tryDispute()
-          })
-          refreshTimer = setInterval(() => {
+          window.person = new Wallet("miner" + Math.random())
+          window.m = new Miner(person, window.web3)
+          window.d = new Disputer(person, window.web3)
+          const syncHandler = () => {
             window.web3.eth.getBlockNumber((error, result) => {
-              if (d.handler.doneSyncing) {
-                clearInterval(refreshTimer)
-                console.log("Syncing")
-                //d.handler.sync(result)
-                d.tryDispute()
+              if (result <= d.getBlockNumber()) {
+                setTimeout(syncHandler, 1000);
+                return
               }
+              console.log("Syncing...", result)
+              d.sync(result, () => {
+                if (!syncHandler.stopped) {
+                  d.tryDispute()
+                  syncHandler()
+                }
+              })
             })
-          }, 1000)
+          }
+          window.syncHandler = syncHandler
+          syncHandler()
         }, 0)
       } else {
         document.getElementById("miner_form").style = "display: none;"
@@ -85,11 +88,11 @@ window.addEventListener('load', async () => {
         result.innerHTML = "Loading..."
         log.innerHTML = ""
         setTimeout(() => {
-          window.person = new wallet("Person #" + id)
-          window.handler = new txhandler(person, window.web3)
+          window.person = new Wallet("Person #" + id)
+          window.handler = new TXHandler(person, window.web3)
           handler.addReceiveListener(tx => {
             let msgDisplay = ""
-            if (typeof tx.receiverData.msg === "string") {
+            if (tx.receiverData.msg != null) {
               msgDisplay = " | " + hexToStr(tx.receiverData.msg)
             }
             log.innerHTML += "Received " + tx.receiverData.amount + msgDisplay + " (" + tx.id.toString(16) + ")" + "<br/>"
@@ -105,12 +108,12 @@ window.addEventListener('load', async () => {
           }
           let first = true
           const syncHandler = () => {
-            console.log("Syncing...")
             window.web3.eth.getBlockNumber((error, result) => {
-              if (result <= handler.position) {
+              if (result <= handler.getBlockNumber()) {
                 setTimeout(syncHandler, 1000);
                 return
               }
+              console.log("Syncing...", result)
               handler.sync(result, () => {
                 if (first) {
                   window.result.innerHTML = "Done!"
@@ -147,20 +150,20 @@ window.addEventListener('load', async () => {
       const pubKey = form.elements.to.value
       const amount = form.elements.amount.value
       const msg = form.elements.msg.value
-      result.innerHTML = JSON.stringify(handler.createFullTx(parser.parseJSONKey(JSON.parse(pubKey)), amount, 3, strToHex(msg)))
+      result.innerHTML = JSON.stringify(handler.createFullTx(Parser.parseJSONKey(JSON.parse(pubKey)), amount, 3, strToHex(msg)))
     }
 
     mintTx = e => {
       e.preventDefault()
       const form = e.target
       const tx = form.elements.tx.value
-      m.mint(parser.parseJSONTx(JSON.parse(tx)))
+      m.mint(Parser.parseJSONTx(JSON.parse(tx)))
     }
 
     submitFullTx = e => {
       e.preventDefault()
       const form = e.target
       const fullTx = form.elements.fullTx.value
-      m.submit(parser.parseJSONFullTx(JSON.parse(fullTx)))
+      m.submit(Parser.parseJSONFullTx(JSON.parse(fullTx)))
     }
 });

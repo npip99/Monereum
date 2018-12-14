@@ -477,4 +477,12 @@ for (let i = 1; i < 128; i++) {
 	ECCPoint.hashSet.push(nextHashP(ECCPoint.hashSet[i - 1]))
 }
 
-module.exports = ECCPoint
+const pt = (x, y, z) => (new ECCPoint(x, y, z))
+
+pt.p = ECCPoint.p
+pt.q = ECCPoint.q
+pt.zero = ECCPoint.zero
+pt.g = ECCPoint.g
+pt.h = ECCPoint.h
+
+module.exports = pt

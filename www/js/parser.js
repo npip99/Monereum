@@ -24,7 +24,7 @@ class Parser {
 
   static parseJSONPt(p) {
     const parseBigInt = Parser.parseJSONBigInt
-    return new pt(parseBigInt(p.x), parseBigInt(p.y))
+    return pt(parseBigInt(p.x), parseBigInt(p.y))
   }
 
   static parseJSONTx(tx) {
@@ -70,7 +70,7 @@ class Parser {
   static parsePt(parser) {
     const x = Parser.parseNum(parser)
     const y = Parser.parseNum(parser)
-    return new pt(x, y)
+    return pt(x, y)
   }
 
   static parseNum(parser) {
