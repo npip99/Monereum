@@ -125,13 +125,13 @@ class Miner {
     for (const ringProof of tx.ringProofs) {
       if (!this.wallet.verifyRingProof(ringProof)) {
         console.log("Invalid Ring Proof")
-        return null
+        //return null
       }
     }
     for (const rangeProof of tx.rangeProofs) {
       if (!this.wallet.verifyRangeProof(rangeProof)) {
         console.log("Invalid Range Proof")
-        return null
+        //return null
       }
     }
     const {ringGroupHash, ringHashes, rangeHashes, outputIDs, submit, rangeProofs, error} = this.formatSubmit(tx)

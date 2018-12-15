@@ -91,11 +91,16 @@ window.addEventListener('load', async () => {
           window.person = new Wallet("Person #" + id)
           window.handler = new TXHandler(person, window.web3)
           handler.addReceiveListener(tx => {
-            let msgDisplay = ""
-            if (tx.receiverData.msg != null) {
-              msgDisplay = " | " + hexToStr(tx.receiverData.msg)
+            let logText = ""
+            for (const [i, txData] of handler.getFunds().entries()) {
+              const tx = txData.tx
+              let msgDisplay = ""
+              if (tx.receiverData.msg != null) {
+                msgDisplay = " | " + hexToStr(tx.receiverData.msg)
+              }
+              logText += (i + 1) + ") " + tx.id.toString(16) + "<br/>" + "Received " + (txData.spent ? "(Spent) " : "") + tx.receiverData.amount + msgDisplay + "<br/>"
             }
-            log.innerHTML += "Received " + tx.receiverData.amount + msgDisplay + " (" + tx.id.toString(16) + ")" + "<br/>"
+            log.innerHTML = logText
           })
           /*
           handler.addSpendListener(tx => {

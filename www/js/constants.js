@@ -24,7 +24,9 @@ module.exports = {
   commitRingGroupFuncHash: hashFunc("commitRingGroup(uint256[],uint256[],uint256[])"),
   mintFuncHash: hashFunc("mint(uint256[2],uint256[2],uint256)"),
   disputeLateRangeProofFuncHash: hashFunc("disputeLateRangeProof(uint256[],uint256[],uint256[],uint256[])"),
-  disputeRangeProofFuncHash: hashFunc("disputeRangeProof(uint256[],uint256[],uint256[],uint256)"),
+  disputeTopicFuncHash: hashFunc("disputeTopic(uint256[],uint256[],uint256[],uint256)"),
+  resolveAndClaimRingProofBountyFuncHash: hashFunc("resolveAndClaimRingProofBounty(uint256,uint256[2][MIXIN],uint256[2][MIXIN],uint256[2],uint256[2],uint256,uint256[MIXIN],uint256[MIXIN],uint256,uint256[],uint256[],uint256[],uint256[],uint256)".replace(/MIXIN/g, mixin)),
+  resolveAndClaimRangeProofBountyFuncHash: hashFunc("resolveAndClaimRangeProofBounty(uint256,uint256[2],uint256[2][],uint256[],uint256[2][],uint256[],uint256[],uint256[],uint256[],uint256[],uint256)"),
   mixin: mixin,
   disputeTime: 8,
 }

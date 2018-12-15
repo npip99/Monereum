@@ -1,6 +1,8 @@
 const abi = require('./abi')
 const constants = require('./constants')
 const TXHandler = require('./txhandler')
+const Parser = require('./parser')
+const bigInt = require('big-integer')
 
 const hash = abi.hash
 
@@ -14,7 +16,6 @@ class Disputer {
     this.ringGroupDisputed = {}
     this.ringGroupDisputeResolved = {}
 
-    this.disputed = {}
     this.submittedLateRingGroup = {}
     this.disputedLateRangeProof = {}
     this.disputedRingProof = {}
@@ -65,7 +66,7 @@ class Disputer {
       })
 
       const tryHandleInterval = setInterval(() => {
-        if (!ringGroupDisputedResults || !ringGroupDisputeResolvedResults) {
+        if (!ringGroupDisputeResolvedResults || !ringGroupDisputedResults) {
           return
         }
         clearInterval(tryHandleInterval)
@@ -75,13 +76,25 @@ class Disputer {
         for (const ringGroupDisputeResolvedResult of ringGroupDisputeResolvedResults) {
           this.handleRingGroupDisputeResolvedResult(ringGroupDisputeResolvedResult)
         }
-      }, 75)
 
-      this.doneSyncing = true
-      if (callback) {
-        callback()
-      }
+        this.doneSyncing = true
+        if (callback) {
+          callback()
+        }
+      }, 75)
     })
+  }
+
+  handleRingGroupDisputeResolvedResult(result) {
+    const parser = Parser.initParser(result.data)
+    const ringGroupHash = Parser.parseNum(parser)
+    const topicHash = Parser.parseNum(parser)
+
+    const ringGroupHashHex = ringGroupHash.toString(16)
+    if (!this.ringGroupDisputeResolved[ringGroupHashHex]) {
+      this.ringGroupDisputeResolved[ringGroupHashHex] = {}
+    }
+    this.ringGroupDisputeResolved[ringGroupHashHex][topicHash.toString(16)] = true
   }
 
   handleRingGroupDisputedResult(result) {
@@ -89,23 +102,45 @@ class Disputer {
     const ringGroupHash = Parser.parseNum(parser)
     const topicHash = Parser.parseNum(parser)
 
-    console.log(result)
-  }
-
-  handleRingGroupDisputeResolvedResult(result) {
-    const parser = Parser.initParser(result.data)
-    const ringGroupHash = Parser.parseNum(parser)
-    const topicHash = Parser.parseNum(parser)
+    const ringGroupHashHex = ringGroupHash.toString(16)
+    const topicHashHex = topicHash.toString(16)
+    if (!this.ringGroupDisputed[ringGroupHashHex]) {
+      this.ringGroupDisputed[ringGroupHashHex] = {}
+    }
+    this.ringGroupDisputed[ringGroupHashHex][topicHashHex] = {
+      transactionHash: result.transactionHash,
+      blockNumber: result.blockNumber,
+    }
   }
 
   tryDispute() {
-    if (!this.handler.doneSyncing) {
+    if (!this.doneSyncing) {
       throw "Handler not done syncing"
     }
     for (const ringGroupHash in this.handler.ringGroups) {
       const ringGroupData = this.handler.ringGroups[ringGroupHash]
       if (ringGroupData.isRejected || ringGroupData.confirmed) {
         continue
+      }
+      const ringGroupHashHex = ringGroupHash.toString(16)
+      if (this.ringGroupDisputed[ringGroupHashHex]) {
+        for (const topicHashHex in this.ringGroupDisputed[ringGroupHashHex]) {
+          if (this.ringGroupDisputeResolved[ringGroupHashHex] && this.ringGroupDisputeResolved[ringGroupHashHex][topicHashHex]) {
+            return
+          }
+          if (
+            (
+              this.disputedRingProof[ringGroupHashHex]
+              && this.ringGroupDisputed[ringGroupHashHex][topicHashHex].transactionHash == this.disputedRingProof[ringGroupHashHex][topicHashHex]
+            ) || (
+              this.getBlockNumber() > this.ringGroupDisputed[ringGroupHashHex][topicHashHex].blockNumber + 2 * constants.disputeTime
+            )
+          ) {
+            console.log("Successful Ring Group Dispute. Resolving...")
+            const status = this.resolveRangeProof(ringGroupHash, bigInt(topicHashHex, 16))
+            console.log("Resolution Status: ", status)
+          }
+        }
       }
       if (
         ringGroupData.rangeProofs.length < ringGroupData.ringGroup.outputIDs.length - 1
@@ -114,8 +149,10 @@ class Disputer {
         this.disputeLateRangeProof(ringGroupData)
         continue
       }
-      if (ringGroupData.isValid
-      && this.handler.position >= ringGroupData.timerBlock + 2 * constants.disputeTime) {
+      if (
+        ringGroupData.isValid
+        && this.handler.position >= ringGroupData.timerBlock + 2 * constants.disputeTime
+      ) {
         this.submitLateRingGroup(ringGroupData)
         continue
       }
@@ -203,8 +240,10 @@ class Disputer {
 
   disputeRangeProof(ringGroupData, rangeProof) {
     console.log(ringGroupData, rangeProof)
-    const ringGroupHashHex = ringGroupData.ringGroup.rinGroupHash.toString(16)
+    const ringGroupHashHex = ringGroupData.ringGroup.ringGroupHash.toString(16)
+
     let rangeHash
+    const rangeHashes = ringGroupData.ringGroup.rangeHashes
     for (const [i, rp] of ringGroupData.rangeProofs.entries()) {
       if (rp == rangeProof) {
         rangeHash = rangeHashes[i]
@@ -212,6 +251,14 @@ class Disputer {
       }
     }
     const rangeHashHex = rangeHash.toString(16)
+    console.log(ringGroupHashHex, rangeHashHex)
+    console.log(this.ringGroupDisputed)
+    if (
+      this.ringGroupDisputed[ringGroupHashHex]
+      && this.ringGroupDisputed[ringGroupHashHex][rangeHashHex]
+    ) {
+      return
+    }
     if (!this.disputedRangeProof[ringGroupHashHex]) {
       this.disputedRangeProof[ringGroupHashHex] = {}
     }
@@ -222,22 +269,77 @@ class Disputer {
 
     const outputIDs = ringGroupData.ringGroup.outputIDs
     const ringHashes = ringGroupData.ringGroup.ringHashes
-    const rangeHashes = ringGroupData.ringGroup.rangeHashes
-    console.log(outputIDs, ringHashes, rangeHashes, rangeHash)
-    const funcHash = constants.disputeRangeProofFuncHash
-    const data = funcHash.slice(0, 4*2) + abi.format(outputIDs, ringHashes, rangeHashes, rangeHash)
+
+    const funcHash = constants.disputeTopicFuncHash
+    const data = funcHash.slice(0, 4*2) + abi.format(
+      outputIDs,
+      ringHashes,
+      rangeHashes,
+      rangeHash
+    )
     this.web3.eth.sendTransaction({
         to: constants.blockchain,
         data: data,
         gasPrice: 5e9,
     }, (error, transactionHash) => {
-      this.disputedRangeProof[ringGroupHashHex][rangeHashHex] = transactionHash
       if (error) {
         console.error("Range Proof Dispute Failed: ", error)
       } else {
-        console.log("Range Proof Dispute Succeeded: ", transactionHash)
+        console.log("Range Proof Dispute Sent: ", transactionHash)
+        this.disputedRangeProof[ringGroupHashHex][rangeHashHex] = transactionHash
       }
     })
+  }
+
+  resolveRangeProof(ringGroupHash, rangeHash) {
+    const ringGroupData = this.handler.ringGroups[ringGroupHash.toString(16)]
+    if (!ringGroupData) {
+      throw "No ring group found"
+    }
+
+    let rangeProof
+    const rangeHashes = ringGroupData.ringGroup.rangeHashes
+    for (const [i, rp] of ringGroupData.rangeProofs.entries()) {
+      if (rangeHash.eq(rangeHashes[i])) {
+        rangeProof = rp
+        break
+      }
+    }
+    if (!rangeProof) {
+      return null
+    }
+
+    const funds = rangeProof.commitment
+    const outputIDs = ringGroupData.ringGroup.outputIDs
+    const ringHashes = ringGroupData.ringGroup.ringHashes
+    const keyImageHashes = ringGroupData.ringProofs.map(rp => hash(rp.keyImage))
+    keyImageHashes.sort((a, b) => a.lt(b) ? -1 : 1)
+    const funcHash = constants.resolveAndClaimRangeProofBountyFuncHash
+    const data = funcHash.slice(0, 4*2) + abi.format(
+      ringGroupData.ringGroup.ringGroupHash,
+      rangeProof.commitment,
+      rangeProof.rangeCommitments,
+      rangeProof.rangeBorromeans,
+      rangeProof.rangeProofs.map(pf => Object.assign(pf, {'static': true})),
+      rangeProof.indices,
+      outputIDs,
+      ringHashes,
+      rangeHashes,
+      keyImageHashes,
+      rangeHash
+    )
+    this.web3.eth.sendTransaction({
+        to: constants.disputeHelper,
+        data: data,
+        gasPrice: 5e9,
+    }, (error, transactionHash) => {
+      if (error) {
+        console.error("Range Proof Dispute Resolution Failed: ", error)
+      } else {
+        console.log("Range Proof Dispute Resolution Sent: ", transactionHash)
+      }
+    })
+    return true
   }
 }
 

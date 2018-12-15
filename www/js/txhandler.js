@@ -54,6 +54,15 @@ class TXHandler {
     this.fullScanning = fullScanning
   }
 
+  getFunds() {
+    const fundTxs = []
+    for (const fund of this.funds) {
+      const txData = this.transactions[fund.toString(16)]
+      fundTxs.push(txData)
+    }
+    return fundTxs
+  }
+
   getBlockNumber() {
     return this.position
   }
