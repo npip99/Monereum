@@ -380,7 +380,7 @@ class Disputer {
     }
 
     const ringGroupHashHex = ringGroupHash.toString(16)
-    const ringHashHex = rangeHash.toString(16)
+    const ringHashHex = ringHash.toString(16)
     if (!this.resolvedRingProof[ringGroupHashHex]) {
       this.resolvedRingProof[ringGroupHashHex] = {}
     }
@@ -402,14 +402,14 @@ class Disputer {
       ringProof.keyImage,
       ringProof.commitment,
       ringProof.borromean,
-      Object.assign(ringProof.imageFundProofs, {'static': true}),
-      Object.assign(ringProof.commitmentProofs, {'static': true}),
+      Object.assign(ringProof.imageFundProofs.map(pf => Object.assign(pf, {'static': true})), {'static': true}),
+      Object.assign(ringProof.commitmentProofs.map(pf => Object.assign(pf, {'static': true})), {'static': true}),
       ringProof.outputHash,
       outputIDs,
       ringHashes,
       rangeHashes,
       keyImageHashes,
-      rangeHash
+      ringHash
     )
     this.web3.eth.sendTransaction({
         to: constants.disputeHelper,
