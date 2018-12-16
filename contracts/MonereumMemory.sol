@@ -86,8 +86,4 @@ contract MonereumMemory is MonereumMath {
         uint256[] outputIDs;
         uint256 keyImageHash;
     }
-
-    struct ringProofVariables {
-        uint256 ringHash;
-    }
 }

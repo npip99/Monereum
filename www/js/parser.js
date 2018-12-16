@@ -3,6 +3,11 @@ const pt = require('./ecc-point')
 const constants = require('./constants')
 const aes = require('aes-js')
 
+const makeStatic = inp => {
+  inp.static = true;
+  return inp
+}
+
 class Parser {
   static parseJSONBigInt(num) {
     if (num.length > 256) {
@@ -47,18 +52,18 @@ class Parser {
         commitment: parsePt(rp.commitment),
         rangeCommitments: rp.rangeCommitments.map(parsePt),
         rangeBorromeans: rp.rangeBorromeans.map(parseBigInt),
-        rangeProofs: rp.rangeProofs.map(pf => [parseBigInt(pf[0]), parseBigInt(pf[1])]),
+        rangeProofs: rp.rangeProofs.map(pf => [parseBigInt(pf[0]), parseBigInt(pf[1])]).map(makeStatic),
         indices: rp.indices.map(parseBigInt),
       }
     })
     tx.ringProofs = tx.ringProofs.map(rp => {
       return {
-        funds: rp.funds.map(parseTx),
+        funds: makeStatic(rp.funds.map(parseTx)),
         keyImage: parsePt(rp.keyImage),
         commitment: parsePt(rp.commitment),
         borromean: bigInt(rp.borromean),
-        imageFundProofs: rp.imageFundProofs.map(parseBigInt),
-        commitmentProofs: rp.commitmentProofs.map(parseBigInt),
+        imageFundProofs: makeStatic(rp.imageFundProofs.map(parseBigInt)),
+        commitmentProofs: makeStatic(rp.commitmentProofs.map(parseBigInt)),
         outputHash: bigInt(rp.outputHash),
       }
     })
@@ -112,20 +117,19 @@ class Parser {
   }
 
   static parseRingProof(parser) {
-    let ptr = 0
     const ringHash = Parser.parseNum(parser)
-    const funds = []
+    const funds = makeStatic([])
     for (let i = 0; i < constants.mixin; i++) {
       funds.push(Parser.parsePt(parser))
     }
     const keyImage = Parser.parsePt(parser)
     const commitment = Parser.parsePt(parser)
     const borromean = Parser.parseNum(parser)
-    const imageFundProofs = []
+    const imageFundProofs = makeStatic([])
     for (let i = 0; i < constants.mixin; i++) {
       imageFundProofs.push(Parser.parseNum(parser))
     }
-    const commitmentProofs = []
+    const commitmentProofs = makeStatic([])
     for (let i = 0; i < constants.mixin; i++) {
       commitmentProofs.push(Parser.parseNum(parser))
     }
@@ -200,10 +204,9 @@ class Parser {
     Parser.parseNum(parser)
     const rangeProofs = []
     for (let i = 0; i < numBits; i++) {
-      const rangeProof = []
+      const rangeProof = makeStatic([])
       rangeProof.push(Parser.parseNum(parser))
       rangeProof.push(Parser.parseNum(parser))
-      rangeProof.static = true
       rangeProofs.push(rangeProof)
     }
     Parser.parseNum(parser)

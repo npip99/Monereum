@@ -8,8 +8,8 @@ module.exports = {
   // Rinkeby
   // initializer: '0x643d1FF3Baf8732a0d247D5c0df6E0e5C091e1f4'
   // verifier: '0x70dbb8Eb47ffcf898060c6658f189575d18392B7',
-  blockchain: '0xc9834242adaf3dba84555ff6a4e6ddf8757cf489',
-  disputeHelper: '0x7380c0c0e935e88bf1ec75e87d5e804366344ecc',
+  blockchain: '0xc1fd6a943b4fe2a6cdba8f836bbeb8d6c96c291b',
+  disputeHelper: '0xfdffc44fbff54dec1275fba64ed2b7e7fb82fb09',
   ringGroupTopic: '0x' + hashFunc("LogRingGroup(uint256,uint256[],uint256[],uint256[],bytes)"),
   ringProofTopic: '0x' + hashFunc("LogRingProof(uint256,uint256[2][MIXIN],uint256[2],uint256[2],uint256,uint256[MIXIN],uint256[MIXIN],uint256)".replace(/MIXIN/g, "" + mixin)),
   rangeProofTopic: '0x' + hashFunc("LogRangeProof(uint256,uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])"),

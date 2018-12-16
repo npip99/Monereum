@@ -20,18 +20,18 @@ class Miner {
     this.watched = {}
 
     const ringGroups = this.web3.eth.filter({
-        from: 0,
-        toBlock: 'latest',
-        address: constants.blockchain,
-        topics: [constants.ringGroupTopic]
+      from: 0,
+      toBlock: 'latest',
+      address: constants.blockchain,
+      topics: [constants.ringGroupTopic]
     })
 
     ringGroups.watch((error, result) => {
-      if (this.watched[result.transactionHash]) {
+      const {ringGroupHash, outputIDs, ringHashes} = Parser.parseRingGroup(Parser.initParser(result.data))
+      if (this.watched[ringGroupHash]) {
         return
       }
-      this.watched[result.transactionHash] = true
-      const {ringGroupHash, outputIDs, ringHashes} = Parser.parseRingGroup(Parser.initParser(result.data))
+      this.watched[ringGroupHash] = true
       const ringGroupData = this.pending[ringGroupHash]
       if (ringGroupData) {
         console.log("Ring Group Recognized: ", ringGroupHash.toString(16))
@@ -55,26 +55,37 @@ class Miner {
     })
 
     const rangeProofs = this.web3.eth.filter({
-        from: 0,
-        toBlock: 'latest',
-        address: constants.blockchain,
-        topics: [constants.rangeProofTopic]
+      from: 0,
+      toBlock: 'latest',
+      address: constants.blockchain,
+      topics: [constants.rangeProofTopic]
     })
 
     rangeProofs.watch((error, result) => {
-      if (this.watched[result.transactionHash]) {
+      const rangeProof = Parser.parseRangeProof(Parser.initParser(result.data))
+
+      const rangeProofHash = hash(
+        rangeProof.commitment,
+        rangeProof.rangeCommitment,
+        rangeProof.rangeBorromeans,
+        rangeProof.rangeProofs,
+        rangeProof.indices
+      )
+      const rangeProofSubmissionHash = hash(1, rangeProof.ringGroupHash, rangeProofHash)
+      if (this.watched[rangeProofSubmissionHash]) {
         return
       }
-      this.watched[result.transactionHash] = true
-      const rangeProof = Parser.parseRangeProof(Parser.initParser(result.data))
+      this.watched[rangeProofSubmissionHash] = true
+
       if (this.rangeProofsRemaining[rangeProof.ringGroupHash]) {
         console.log("Range Proof of ", rangeProof.ringGroupHash.toString(16), " has been confirmed: ", this.rangeProofsRemaining[rangeProof.ringGroupHash] - 1, " remaining")
         if((--this.rangeProofsRemaining[rangeProof.ringGroupHash]) == 0) {
-          const timerBlock = result.blockNumber
+          this.pending[rangeProof.ringGroupHash].timerBlock = result.blockNumber
           const trySubmitRingGroup = () => {
             web3.eth.getBlockNumber((error, result) => {
+              const {outputIDs, ringHashes, rangeHashes, timerBlock} = this.pending[rangeProof.ringGroupHash]
               if (result >= timerBlock + constants.disputeTime) {
-                const {outputIDs, ringHashes, rangeHashes} = this.pending[rangeProof.ringGroupHash]
+                this.pending[rangeProof.ringGroupHash].timerBlock = Infinity
                 const data = constants.commitRingGroupFuncHash.slice(0, 4*2) + abi.format(outputIDs, ringHashes, rangeHashes)
                 this.web3.eth.sendTransaction({
                   to: constants.blockchain,
@@ -87,13 +98,66 @@ class Miner {
                     console.log("Ring Group Commit Sent: ", transactionHash)
                   }
                 })
-              } else {
-                setTimeout(trySubmitRingGroup, 75)
               }
+              setTimeout(trySubmitRingGroup, 75)
             })
           }
           setTimeout(trySubmitRingGroup, 75)
         }
+      }
+    })
+
+    const ringGroupDisputes = this.web3.eth.filter({
+        from: 0,
+        toBlock: 'latest',
+        address: constants.blockchain,
+        topics: [constants.ringGroupDisputedTopic]
+    })
+
+    ringGroupDisputes.watch((error, result) => {
+      const parser = Parser.initParser(result.data)
+      const ringGroupHash = Parser.parseNum(parser)
+      const topicHash = Parser.parseNum(parser)
+
+      const disputeHash = hash(2, ringGroupHash, topicHash)
+      if (this.watched[disputeHash]) {
+        return
+      }
+      this.watched[disputeHash] = true
+
+      const resolutionHash = hash(3, ringGroupHash, topicHash)
+
+      if (this.watched[resolutionHash]) {
+        return
+      } else {
+        this.pending[ringGroupHash].disputes.push(disputeHash)
+        this.pending[ringGroupHash].timerBlock = Infinity
+      }
+    })
+
+    const ringGroupResolvedDisputes = this.web3.eth.filter({
+        from: 0,
+        toBlock: 'latest',
+        address: constants.blockchain,
+        topics: [constants.ringGroupDisputeResolvedTopic]
+    })
+
+    ringGroupResolvedDisputes.watch((error, result) => {
+      const parser = Parser.initParser(result.data)
+      const ringGroupHash = Parser.parseNum(parser)
+      const topicHash = Parser.parseNum(parser)
+
+      const resolutionHash = hash(3, ringGroupHash, topicHash)
+      if (this.watched[resolutionHash]) {
+        return
+      }
+      this.watched[resolutionHash] = true
+
+      const disputeHash = hash(2, ringGroupHash, topicHash)
+      this.pending[ringGroupHash].disputes = this.pending[ringGroupHash].disputes.filter(a => a.neq(disputeHash))
+
+      if (this.pending[ringGroupHash].disputes.length == 0) {
+        this.pending[ringGroupHash].timerBlock = result.blockNumber
       }
     })
   }
@@ -148,7 +212,14 @@ class Miner {
       if (error) {
         console.error("Ring Group Submission Failed")
       } else {
-        this.pending[ringGroupHash] = {rangeProofs, rangeHashes, ringHashes, outputIDs}
+        this.pending[ringGroupHash] = {
+          outputIDs,
+          ringHashes,
+          rangeHashes,
+          rangeProofs,
+          timerBlock: null,
+          disputes: [],
+        }
         console.log("Ring Group Submission Sent: ", transactionHash)
       }
     })
@@ -182,10 +253,15 @@ class Miner {
       if (txRingProof.outputHash.neq(outputHash)) {
         error = "Output hashes do not agree"
       }
-      const ringProof = [txRingProof.funds.map(f => f.dest), txRingProof.keyImage, txRingProof.commitment, txRingProof.borromean, txRingProof.imageFundProofs, txRingProof.commitmentProofs, outputHash]
-      ringProof[0].static = true
-      ringProof[4].static = true
-      ringProof[5].static = true
+      const ringProof = [
+        Object.assign(txRingProof.funds.map(f => f.dest), {'static': true}),
+        txRingProof.keyImage,
+        txRingProof.commitment,
+        txRingProof.borromean,
+        txRingProof.imageFundProofs,
+        txRingProof.commitmentProofs,
+        outputHash
+      ]
       const ringHash = hash(...ringProof)
       ringProofs.push(ringProof)
       ringHashes.push(ringHash)
@@ -200,7 +276,7 @@ class Miner {
         rxRangeProof.commitment,
         rxRangeProof.rangeCommitments,
         rxRangeProof.rangeBorromeans,
-        rxRangeProof.rangeProofs.map(a => {a.static = true; return a}),
+        rxRangeProof.rangeProofs,
         rxRangeProof.indices
       ]
       const rangeHash = hash(...rangeProof)

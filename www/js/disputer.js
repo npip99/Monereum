@@ -7,11 +7,12 @@ const bigInt = require('big-integer')
 const hash = abi.hash
 
 class Disputer {
-  constructor(wallet, web3) {
+  constructor(wallet, web3, goodAddresses) {
     this.wallet = wallet
     this.web3 = web3
     this.handler = new TXHandler(wallet, web3, true)
     this.doneSyncing = true
+    this.goodAddresses = goodAddresses
 
     this.ringGroupDisputed = {}
     this.ringGroupDisputeResolved = {}
@@ -45,28 +46,28 @@ class Disputer {
 
     const fromBlock = this.handler.position + 1
 
+    const createTopicFilter = (topic) => this.web3.eth.filter({
+      fromBlock: fromBlock,
+      toBlock: block,
+      address: constants.blockchain,
+      topics: [topic],
+    })
+
+    const ringGroupDisputedListener = createTopicFilter(constants.ringGroupDisputedTopic)
+    const ringGroupDisputeResolvedListener = createTopicFilter(constants.ringGroupDisputeResolvedTopic)
+
+    let ringGroupDisputedResults
+    let ringGroupDisputeResolvedResults
+
+    ringGroupDisputedListener.get((error, result) => {
+      ringGroupDisputedResults = result
+    })
+
+    ringGroupDisputeResolvedListener.get((error, result) => {
+      ringGroupDisputeResolvedResults = result
+    })
+
     this.handler.sync(block, () => {
-      const createTopicFilter = (topic) => this.web3.eth.filter({
-        fromBlock: fromBlock,
-        toBlock: block,
-        address: constants.blockchain,
-        topics: [topic],
-      })
-
-      const ringGroupDisputedListener = createTopicFilter(constants.ringGroupDisputedTopic)
-      const ringGroupDisputeResolvedListener = createTopicFilter(constants.ringGroupDisputeResolvedTopic)
-
-      let ringGroupDisputedResults
-      let ringGroupDisputeResolvedResults
-
-      ringGroupDisputedListener.get((error, result) => {
-        ringGroupDisputedResults = result
-      })
-
-      ringGroupDisputeResolvedListener.get((error, result) => {
-        ringGroupDisputeResolvedResults = result
-      })
-
       const tryHandleInterval = setInterval(() => {
         if (!ringGroupDisputeResolvedResults || !ringGroupDisputedResults) {
           return
@@ -152,7 +153,6 @@ class Disputer {
             const ringGroupHash = bigInt(ringGroupHashHex, 16)
             const topicHash = bigInt(topicHashHex, 16)
 
-            console.log("Ring Group Dispute Found. Resolving...")
             const isRangeProof = this.resolveRangeProof(ringGroupHash, topicHash)
             if (!isRangeProof) {
               this.resolveRingProof(ringGroupHash, topicHash)
@@ -179,7 +179,6 @@ class Disputer {
         continue
       }
       if (ringGroupData.isValid != null && !ringGroupData.isValid) {
-        console.log(ringGroupData)
         let disputableRingProof
         for (const ringProof of ringGroupData.ringProofs) {
           if (!ringProof.isValid) {
@@ -211,7 +210,7 @@ class Disputer {
       return
     }
     this.submittedLateRingGroup[ringGroupHashHex] = true
-    console.log("Late Ring Group Found", "(" + ringGroupHashHex + ")")
+    console.log("Late Ring Group Found: " + ringGroupHashHex)
     const outputIDs = ringGroupData.ringGroup.outputIDs
     const ringHashes = ringGroupData.ringGroup.ringHashes
     const rangeHashes = ringGroupData.ringGroup.rangeHashes
@@ -236,7 +235,7 @@ class Disputer {
       return
     }
     this.disputedLateRangeProof[ringGroupHashHex] = true
-    console.log("Late Ring Proof Found", "(" + ringGroupHashHex + ")")
+    console.log("Late Ring Proof Found: " + ringGroupHashHex)
     const outputIDs = ringGroupData.ringGroup.outputIDs
     const ringHashes = ringGroupData.ringGroup.ringHashes
     const rangeHashes = ringGroupData.ringGroup.rangeHashes
@@ -257,7 +256,6 @@ class Disputer {
   }
 
   disputeRingProof(ringGroupData, ringProof) {
-    console.log(ringGroupData, ringProof)
     const ringGroupHashHex = ringGroupData.ringGroup.ringGroupHash.toString(16)
 
     let ringHash
@@ -268,8 +266,6 @@ class Disputer {
       }
     }
     const ringHashHex = ringHash.toString(16)
-    console.log(ringGroupHashHex, ringHashHex)
-    console.log(this.ringGroupDisputed)
     if (
       this.ringGroupDisputed[ringGroupHashHex]
       && this.ringGroupDisputed[ringGroupHashHex][ringHashHex]
@@ -310,19 +306,15 @@ class Disputer {
   }
 
   disputeRangeProof(ringGroupData, rangeProof) {
-    console.log(ringGroupData, rangeProof)
     const ringGroupHashHex = ringGroupData.ringGroup.ringGroupHash.toString(16)
-
     const rangeHash = hash(
       rangeProof.commitment,
       rangeProof.rangeCommitments,
       rangeProof.rangeBorromeans,
-      rangeProof.rangeProofs.map(pf => Object.assign(pf, {'static': true})),
+      rangeProof.rangeProofs,
       rangeProof.indices,
     )
     const rangeHashHex = rangeHash.toString(16)
-    console.log(ringGroupHashHex, rangeHashHex)
-    console.log(this.ringGroupDisputed)
     if (
       this.ringGroupDisputed[ringGroupHashHex]
       && this.ringGroupDisputed[ringGroupHashHex][rangeHashHex]
@@ -389,6 +381,8 @@ class Disputer {
     }
     this.resolvedRingProof[ringGroupHashHex][ringHashHex] = true
 
+    console.log("Ring Group Resolvable Dispute Found: " + ringGroupHashHex + " | " + rangeHashHex)
+
     const outputIDs = ringGroupData.ringGroup.outputIDs
     const ringHashes = ringGroupData.ringGroup.ringHashes
     const rangeHashes = ringGroupData.ringGroup.rangeHashes
@@ -402,8 +396,8 @@ class Disputer {
       ringProof.keyImage,
       ringProof.commitment,
       ringProof.borromean,
-      Object.assign(ringProof.imageFundProofs.map(pf => Object.assign(pf, {'static': true})), {'static': true}),
-      Object.assign(ringProof.commitmentProofs.map(pf => Object.assign(pf, {'static': true})), {'static': true}),
+      ringProof.imageFundProofs,
+      ringProof.commitmentProofs,
       ringProof.outputHash,
       outputIDs,
       ringHashes,
@@ -437,7 +431,7 @@ class Disputer {
         rp.commitment,
         rp.rangeCommitments,
         rp.rangeBorromeans,
-        rp.rangeProofs.map(pf => Object.assign(pf, {'static': true})),
+        rp.rangeProofs,
         rp.indices
       )
       if (rangeHash.eq(possibleRangeHash)) {
@@ -459,6 +453,8 @@ class Disputer {
     }
     this.resolvedRangeProof[ringGroupHashHex][rangeHashHex] = true
 
+    console.log("Ring Group Resolvable Dispute Found: " + ringGroupHashHex + " | " + rangeHashHex)
+
     const outputIDs = ringGroupData.ringGroup.outputIDs
     const ringHashes = ringGroupData.ringGroup.ringHashes
     const rangeHashes = ringGroupData.ringGroup.rangeHashes
@@ -470,7 +466,7 @@ class Disputer {
       rangeProof.commitment,
       rangeProof.rangeCommitments,
       rangeProof.rangeBorromeans,
-      rangeProof.rangeProofs.map(pf => Object.assign(pf, {'static': true})),
+      rangeProof.rangeProofs,
       rangeProof.indices,
       outputIDs,
       ringHashes,

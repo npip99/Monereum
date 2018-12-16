@@ -664,8 +664,7 @@ contract MonereumBlockchain is MonereumMemory {
         uint256[MIXIN] commitmentProofs,
         uint256 outputHash
     ) public {
-        ringProofVariables memory v;
-        v.ringHash = uint256(keccak256(abi.encode(
+        uint256 ringHash = uint256(keccak256(abi.encode(
             funds,
             keyImage,
             commitment,
@@ -674,17 +673,15 @@ contract MonereumBlockchain is MonereumMemory {
             commitmentProofs,
             outputHash
         )));
-        if(topicStatuses[ringGroupHash][v.ringHash] != ProofStatus.Unknown) {
+        if(topicStatuses[ringGroupHash][ringHash] != ProofStatus.Unknown) {
             return;
         }
 
-        require(badDisputeTopicBountyHolders[ringGroupHash][v.ringHash] != 0, "Ring Proof is not disputed");
+        require(badDisputeTopicBountyHolders[ringGroupHash][ringHash] != 0, "Ring Proof is not disputed");
 
         // Check commitmentHash
         for (uint256 i = 0; i < MIXIN; i++) {
-            uint256 commitmentHash = transactions[hashP(funds[i])];
-            commitmentHash &= ~statusBit;
-            require(hashP(commitments[i]) & ~statusBit == commitmentHash, "Wrong commitment value");
+            require(hashP(commitments[i]) & ~statusBit == transactions[hashP(funds[i])] & ~statusBit, "Wrong commitment value");
         }
 
         bool isValid = mv.verifyRingProof(
@@ -699,9 +696,9 @@ contract MonereumBlockchain is MonereumMemory {
         );
 
         if (isValid) {
-            topicStatuses[ringGroupHash][v.ringHash] = ProofStatus.Accepted;
+            topicStatuses[ringGroupHash][ringHash] = ProofStatus.Accepted;
         } else {
-            topicStatuses[ringGroupHash][v.ringHash] = ProofStatus.Rejected;
+            topicStatuses[ringGroupHash][ringHash] = ProofStatus.Rejected;
         }
     }
 

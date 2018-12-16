@@ -43,7 +43,7 @@ contract MonereumMath is MonereumConstants {
     function hashP(uint256[2] p1) public pure returns (uint256) {
         return uint256(keccak256(abi.encode(p1)));
     }
-    
+
     // Excludes [0, 0]
     function eccvalid(uint256[2] p1) public pure returns (bool) {
         if (p1[0] >= p || p1[1] >= p) {
@@ -57,13 +57,6 @@ contract MonereumMath is MonereumConstants {
         } else {
             return false;
         }
-    }
-    
-    function compress(uint256[2] p1) public pure returns (uint256 ret) {
-        ret = p1[0];
-        if ((p1[1] & 1) == 1)
-            ret |= signBit;
-        return ret;
     }
 
     function ecadd(uint256[2] p1, uint256[2] p2) public constant returns (uint256[2] ret) {
