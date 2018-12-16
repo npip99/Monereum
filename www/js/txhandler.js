@@ -317,6 +317,8 @@ class TXHandler {
       console.error("Range Proof without Ring Group!", rangeProof, ringGroupHash)
       return
     }
+    console.log("Range Proof Received (" + result.transactionHash + ")")
+    console.log("Range Proof is for Ring Group: ", ringGroupData.ringGroup.ringGroupHash.toString(16))
     ringGroupData.rangeProofs.push(rangeProof)
     if (ringGroupData.received || this.fullScanning) {
       const verificationResult = this.wallet.verifyRangeProof(rangeProof)
@@ -326,8 +328,6 @@ class TXHandler {
       rangeProof.isValid = verificationResult
       ringGroupData.pendingResult = ringGroupData.pendingResult && verificationResult
     }
-    console.log("Range Proof Received (" + result.transactionHash + ")")
-    console.log("Range Proof is for Ring Group: ", ringGroupData.ringGroup.ringGroupHash.toString(16))
     console.log("Range Proofs Remaining: ", ringGroupData.ringGroup.outputIDs.length - 1 - ringGroupData.rangeProofs.length)
     if (ringGroupData.rangeProofs.length === ringGroupData.ringGroup.outputIDs.length - 1) {
       ringGroupData.timerBlock = result.blockNumber

@@ -6,10 +6,10 @@ module.exports = {
   // "0x643d1ff3baf8732a0d247d5c0df6e0e5c091e1f4", "0x70dbb8Eb47ffcf898060c6658f189575d18392B7"
   // "0x9e4e57f61362961c7de02d78a274b694112fd1e6", 100000000000000000000
   // Rinkeby
-  // initializer: '0x643d1ff3baf8732a0d247d5c0df6e0e5c091e1f4'
+  // initializer: '0x643d1FF3Baf8732a0d247D5c0df6E0e5C091e1f4'
   // verifier: '0x70dbb8Eb47ffcf898060c6658f189575d18392B7',
-  blockchain: '0xaed9fcf985f78ac1ae82fe2c6b4277c0531587b6',
-  disputeHelper: '0x331eebadb3ef3af9e15aca39bfb5945ca02b879f',
+  blockchain: '0xc9834242adaf3dba84555ff6a4e6ddf8757cf489',
+  disputeHelper: '0x7380c0c0e935e88bf1ec75e87d5e804366344ecc',
   ringGroupTopic: '0x' + hashFunc("LogRingGroup(uint256,uint256[],uint256[],uint256[],bytes)"),
   ringProofTopic: '0x' + hashFunc("LogRingProof(uint256,uint256[2][MIXIN],uint256[2],uint256[2],uint256,uint256[MIXIN],uint256[MIXIN],uint256)".replace(/MIXIN/g, "" + mixin)),
   rangeProofTopic: '0x' + hashFunc("LogRangeProof(uint256,uint256[2],uint256[2][],uint256[],uint256[2][],uint256[])"),

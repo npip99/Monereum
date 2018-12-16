@@ -499,7 +499,7 @@ contract MonereumBlockchain is MonereumMemory {
             // Award bounty to anyone when commitment is late
             ethBalances[msg.sender] += goodRingBountyAmount;
         } else {
-            // Award bounty to submitter
+            // Return bounty to submitter
             ethBalances[goodRingGroupBountyHolders[ringGroupHash]] += goodRingBountyAmount;
         }
 
@@ -597,12 +597,11 @@ contract MonereumBlockchain is MonereumMemory {
 
         // Check if already disputed, and if not then assign disputer
         require(badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] == 0, "Already disputed");
-        badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] = sender;
+        badDisputeTopicBountyHolders[ringGroupHash][disputedTopicHash] = msg.sender;
 
         // Take bounty on bad ring
-        address sender = msg.sender;
-        require(ethBalances[sender] >= badRingBountyAmount, "Cannot afford bounty");
-        ethBalances[sender] -= badRingBountyAmount;
+        require(ethBalances[msg.sender] >= badRingBountyAmount, "Cannot afford bounty");
+        ethBalances[msg.sender] -= badRingBountyAmount;
 
         // Log dispute
         emit LogRingGroupDisputed(
