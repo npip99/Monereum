@@ -71,18 +71,6 @@ contract MonereumBlockchain is MonereumMemory {
         minerFeeH[fee] = ecmul(h, fee);
     }
 
-    event LogTransaction(
-        uint256 outputID,
-        uint256[2] src,
-        uint256[2] dest,
-        uint256[2] commitment,
-        uint256 commitmentAmount
-    );
-
-    event LogMintTransaction(
-        uint256 transactionID
-    );
-
     // Mint Monereum
     function mint(
         uint256[2] src,
@@ -129,25 +117,6 @@ contract MonereumBlockchain is MonereumMemory {
     // Verified: Each ringProof commitment is unique
     // rangeProofsRemaining[ringGroupHash] = M
     // ethBalances[msg.sender] -= goodRingBountyAmount (Overflow checked)
-
-    event LogRingGroup(
-        uint256 ringGroupHash,
-        uint256[] outputIDs,
-        uint256[] ringHashes,
-        uint256[] rangeHashes,
-        bytes outputMsgs
-    );
-
-    event LogRingProof(
-        uint256 ringHash,
-        uint256[2][MIXIN] funds,
-        uint256[2] keyImage,
-        uint256[2] commitment,
-        uint256 borromean,
-        uint256[MIXIN] imageFundProofs,
-        uint256[MIXIN] commitmentProofs,
-        uint256 outputHash
-    );
 
     // Submits a new ring group
     // =====================
@@ -281,7 +250,6 @@ contract MonereumBlockchain is MonereumMemory {
         v.outputIDs[v.numOutputs] = hashP(minerDest);
         require(getStatus(v.outputIDs[v.numOutputs]) == Status.NonExistant); // "Output transaction already exists"
 
-
         // Calculate ringGroupHash
         v.ringGroupHash = uint256(keccak256(abi.encode(
             v.outputIDs,
@@ -382,15 +350,6 @@ contract MonereumBlockchain is MonereumMemory {
         goodRingGroupBountyHolders[v.ringGroupHash] = v.sender;
     }
 
-    event LogRangeProof(
-        uint256 ringGroupHash,
-        uint256[2] commitment,
-        uint256[2][] rangeCommitments,
-        uint256[] rangeBorromeans,
-        uint256[2][] rangeProofs,
-        uint256[] indices
-    );
-
     // We check all lengths are the same and reasonable
     // Verified: rangeProofCommitment[ringGroupHash][rangeProofHash] == Commitment
     // rangeProofCommitment[ringGroupHash][rangeProofHash] = 0
@@ -464,8 +423,6 @@ contract MonereumBlockchain is MonereumMemory {
             indices
         );
     }
-
-    event LogRingGroupCommitted(uint256 ringGroupHash);
 
     // Commits Ring Group
     // ==================
@@ -550,16 +507,6 @@ contract MonereumBlockchain is MonereumMemory {
         ethBalances[msg.sender] += badRingBountyAward;
     }
 
-    event LogRingGroupDisputed(
-        uint256 ringGroupHash,
-        uint256 disputedTopicHash
-    );
-
-    event LogRingGroupDisputeResolved(
-        uint256 ringGroupHash,
-        uint256 disputedTopicHash
-    );
-
     // Disputes a rangeProofHash
     // =========================
     // Requires a link between outputIDs and ringGroupHash, and between rangeProofHash and ringGroupHash
@@ -631,6 +578,8 @@ contract MonereumBlockchain is MonereumMemory {
             rangeProofs,
             indices
         )));
+
+        // Save gas if it's called many times
         if(topicStatuses[ringGroupHash][rangeProofHash] != ProofStatus.Unknown) {
             return;
         }
@@ -673,6 +622,8 @@ contract MonereumBlockchain is MonereumMemory {
             commitmentProofs,
             outputHash
         )));
+
+        // Save gas if it's called many times
         if(topicStatuses[ringGroupHash][ringHash] != ProofStatus.Unknown) {
             return;
         }
@@ -750,7 +701,7 @@ contract MonereumBlockchain is MonereumMemory {
             // Log resolution
             emit LogRingGroupDisputeResolved(ringGroupHash, disputedTopicHash);
         } else if (disputedProofStatus == ProofStatus.Rejected) {
-            // Reject ring
+            // Reject ring and Log rejection
             require(keyImageHashes.length == ringHashes.length);
             rejectRingGroup(ringGroupHash, outputIDs, keyImageHashes);
 
@@ -789,6 +740,8 @@ contract MonereumBlockchain is MonereumMemory {
     // Helpers
     // ===
 
+    // Check if val is a member of set
+
     function isInSet(uint256 val, uint256[] set) internal pure returns (bool) {
         bool found = false;
         for(uint256 i = 0; i < set.length; i++) {
@@ -799,9 +752,9 @@ contract MonereumBlockchain is MonereumMemory {
         return found;
     }
 
-    // Status Formatter Helper
+    // Parse compressed status from txID
 
-    function getStatus(uint256 transactionID) public constant returns (Status) {
+    function getStatus(uint256 transactionID) public view returns (Status) {
         uint256 txData = transactions[transactionID];
         if (txData == 0) {
             return Status.NonExistant;
@@ -820,8 +773,13 @@ contract MonereumBlockchain is MonereumMemory {
 
     // Ring Group Formatting Helpers
 
-    function getRingGroupInfo(uint256 ringGroup) internal constant returns (uint256, uint256, uint256) {
-        uint256 compactRingGroupData = ringGroupData[ringGroup];
+    function isValidRingGroup(uint256 ringGroupHash) public view returns (bool) {
+        (, uint256 remaining, uint256 ringGroupTime) = getRingGroupInfo(ringGroupHash);
+        return ringGroupTime != 0 && remaining == 0;
+    }
+
+    function getRingGroupInfo(uint256 ringGroupHash) public view returns (uint256, uint256, uint256) {
+        uint256 compactRingGroupData = ringGroupData[ringGroupHash];
         uint256 rangeCommitmentCheck = (compactRingGroupData >> rangeCommitmentCheckBitLocation) & rangeCommitmentCheckBitMask;
         uint256 rangeProofsRemaining = (compactRingGroupData >> rangeProofsRemainingBitLocation) & rangeProofsRemainingBitMask;
         uint256 time = (compactRingGroupData >> timerBitLocation) & timerBitMask;
@@ -835,16 +793,7 @@ contract MonereumBlockchain is MonereumMemory {
             (rangeCommitmentCheck << rangeCommitmentCheckBitLocation);
     }
 
-    function isValidRingGroup(uint256 ringGroupHash) internal constant returns (bool) {
-        (, uint256 remaining, uint256 ringGroupTime) = getRingGroupInfo(ringGroupHash);
-        return ringGroupTime != 0 && remaining == 0;
-    }
-
     // Ring Group Rejected helper
-
-    event LogRingGroupRejected(
-        uint256 ringGroupHash
-    );
 
     // Rejects the given ringGroupHash
     // Assumes outputIDs is all outputs of the given ringGroupHash
@@ -874,4 +823,62 @@ contract MonereumBlockchain is MonereumMemory {
         }
         setRingGroupInfo(ringGroupHash, 0, 0, 0);
     }
+
+    event LogTransaction(
+        uint256 outputID,
+        uint256[2] src,
+        uint256[2] dest,
+        uint256[2] commitment,
+        uint256 commitmentAmount
+    );
+
+    event LogMintTransaction(
+        uint256 transactionID
+    );
+
+    event LogRingGroupRejected(
+        uint256 ringGroupHash
+    );
+
+    event LogRingGroup(
+        uint256 ringGroupHash,
+        uint256[] outputIDs,
+        uint256[] ringHashes,
+        uint256[] rangeHashes,
+        bytes outputMsgs
+    );
+
+    event LogRingProof(
+        uint256 ringHash,
+        uint256[2][MIXIN] funds,
+        uint256[2] keyImage,
+        uint256[2] commitment,
+        uint256 borromean,
+        uint256[MIXIN] imageFundProofs,
+        uint256[MIXIN] commitmentProofs,
+        uint256 outputHash
+    );
+
+    event LogRangeProof(
+        uint256 ringGroupHash,
+        uint256[2] commitment,
+        uint256[2][] rangeCommitments,
+        uint256[] rangeBorromeans,
+        uint256[2][] rangeProofs,
+        uint256[] indices
+    );
+
+    event LogRingGroupCommitted(
+      uint256 ringGroupHash
+    );
+
+    event LogRingGroupDisputed(
+        uint256 ringGroupHash,
+        uint256 disputedTopicHash
+    );
+
+    event LogRingGroupDisputeResolved(
+        uint256 ringGroupHash,
+        uint256 disputedTopicHash
+    );
 }
